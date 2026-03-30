@@ -64,7 +64,15 @@ html, body { background-color: #f8fafc; width: 100%; height: 100%; color: #33415
 .table-container { width: 100%; max-width: 1200px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
 .data-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
 .data-table th { background-color: #f8fafc; color: #94a3b8; font-size: 13px; font-weight: 700; border-bottom: 1px solid #e2e8f0; padding: 18px 15px; text-align: center; }
-.data-table td { padding: 18px 15px; text-align: center; border-bottom: 1px solid #f1f5f9; font-size: 14.5px; }
+
+/* 🌟 빈 줄 출렁임 완벽 방지: 모든 셀의 상하 패딩을 줄이고 높이를 62px로 강제 고정 */
+.data-table td { 
+  padding: 0 15px; 
+  height: 62px; 
+  text-align: center; 
+  border-bottom: 1px solid #f1f5f9; 
+  font-size: 14.5px; 
+}
 
 .clickable-row:hover { background-color: #f8faff; cursor: pointer; }
 
@@ -94,15 +102,34 @@ html, body { background-color: #f8fafc; width: 100%; height: 100%; color: #33415
 /* =========================================
    5. 페이지네이션 & 기타 UI
 ========================================= */
-.pagination { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 25px 0; }
-.pagination button { padding: 8px 14px; border: 1px solid #e2e8f0; background: white; border-radius: 8px; cursor: pointer; color: #64748b; font-weight: 600; font-size: 14px; transition: 0.2s; }
-.pagination button:hover:not(:disabled) { background: #f1f5f9; color: #0ea5e9; border-color: #cbd5e1; }
-.pagination button.active { background: #0ea5e9; color: white; border-color: #0ea5e9; }
-.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination { 
+  display: flex; justify-content: center; align-items: center; gap: 8px; padding: 25px 0; 
+}
+.pagination button { 
+  display: flex; justify-content: center; align-items: center;
+  min-width: 36px; height: 36px; padding: 0 12px; 
+  border: 1px solid #e2e8f0; background: white; border-radius: 8px; 
+  cursor: pointer; color: #64748b; font-weight: 600; font-size: 14px; 
+  transition: all 0.2s ease-in-out; 
+}
+.pagination button:hover:not(:disabled) { 
+  background: #f0f9ff; color: #0ea5e9; border-color: #bae6fd; 
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1);
+}
+.pagination button.active { 
+  background: #0ea5e9; color: white; border-color: #0ea5e9; 
+  font-weight: 800; box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2);
+}
+.pagination button:disabled { 
+  opacity: 0.4; cursor: not-allowed; background: #f8fafc; color: #94a3b8; border-color: #f1f5f9;
+}
 
 .status-badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 800; }
 .status-storage { background-color: #e0f2fe; color: #0369a1; }
+.status-return { background-color: #dcfce7; color: #15803d; }
 .status-discard { background-color: #fee2e2; color: #b91c1c; }
+.status-default { background-color: #f1f5f9; color: #64748b; }
 
 .ai-match-badge { display: inline-block; background-color: #f0f9ff; color: #0ea5e9; padding: 6px 14px; border-radius: 8px; font-weight: 800; border: 1px solid #bae6fd; }
 
@@ -240,8 +267,7 @@ html, body { background-color: #f8fafc; width: 100%; height: 100%; color: #33415
 .claim-ai-btn:disabled { background-color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
 .ai-header { margin-bottom: 20px; }
-.ai-header h3 { color: #1e293b; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
-.ai-header p { color: #64748b; font-size: 15px; }
+.ai-header h3 { color: #1e293b; font-size: 24px; font-weight: 800; margin-bottom: 0; }
 .ai-loading-container { text-align: center; padding: 80px 0; }
 .ai-spinner { margin: 0 auto 20px auto; width: 45px; height: 45px; border: 4px solid #e2e8f0; border-top: 4px solid #0ea5e9; border-radius: 50%; animation: spin 1s linear infinite; }
 .ai-loading-text { color: #0ea5e9; font-weight: 700; font-size: 16px; }

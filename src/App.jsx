@@ -7,7 +7,6 @@ import './App.css';
 const IconMenu = ({ d }) => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d={d}></path></svg>;
 const IconFilter = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>;
 const IconSearch = () => <svg className="search-icon-svg" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
-// 🌟 사이드바 검색 메뉴 타이틀용 돋보기 아이콘
 const IconMenuSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const IconClock = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
 const IconAI = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path></svg>;
@@ -34,6 +33,7 @@ const formatDate = (dateString) => {
 const PIE_COLORS = ['#0ea5e9', '#10b981', '#f43f5e', '#8b5cf6', '#f59e0b', '#14b8a6', '#f97316', '#3b82f6', '#ec4899', '#84cc16'];
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
+// 🌟 수정된 Pagination (1페이지 이동, 10페이지 점프, 기호 변경)
 const Pagination = ({ currentPage, setCurrentPage, totalItems, itemsPerPage }) => {
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const currentBlock = Math.ceil(currentPage / 10);
@@ -55,9 +55,11 @@ const Pagination = ({ currentPage, setCurrentPage, totalItems, itemsPerPage }) =
 
   return (
     <div className="pagination">
-      <button disabled={currentBlock === 1} onClick={() => setCurrentPage(startPage - 1)}>이전</button>
+      <button disabled={currentBlock === 1} onClick={() => setCurrentPage(startPage - 1)}>&lt;&lt;</button>
+      <button disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>&lt;</button>
       {pages}
-      <button disabled={endPage === totalPages} onClick={() => setCurrentPage(endPage + 1)}>다음</button>
+      <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>&gt;</button>
+      <button disabled={endPage === totalPages} onClick={() => setCurrentPage(endPage + 1)}>&gt;&gt;</button>
     </div>
   );
 };
@@ -87,7 +89,6 @@ function App() {
   const [appliedStartDate, setAppliedStartDate] = useState('');
   const [appliedEndDate, setAppliedEndDate] = useState('');
 
-  // 모든 페이징 10개로 통일
   const [searchPage, setSearchPage] = useState(1);
   const [transferTab, setTransferTab] = useState('D-1');
   const [transferPage, setTransferPage] = useState(1);
@@ -143,7 +144,6 @@ function App() {
     }
   }, [activeMenu]);
 
-  // DB 연동 및 더미 데이터 완전 삭제
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -353,11 +353,9 @@ function App() {
   const d2Items = items.filter(item => item.status === '보관중' && item.registeredAt && Math.floor((now.getTime() - new Date(item.registeredAt).getTime()) / (1000 * 60 * 60 * 24)) === 5);
   const currentTransferItems = transferTab === 'D-1' ? d1Items : d2Items;
   
-  // 데이터 페이지네이션 적용 (모두 10개)
   const paginatedSearchItems = filteredItems.slice((searchPage - 1) * itemsPerPage, searchPage * itemsPerPage);
   const paginatedTransferItems = currentTransferItems.slice((transferPage - 1) * itemsPerPage, transferPage * itemsPerPage);
   
-  // 청구 접수 7일 자동 삭제 필터링
   const validClaims = claims.filter(c => {
     const diff = now.getTime() - new Date(c.registeredAt).getTime();
     return diff < 7 * 24 * 60 * 60 * 1000;
@@ -526,11 +524,9 @@ function App() {
         </div>
       </aside>
 
-      {/* 🌟 사이드바 플랫 구조 개편 적용 🌟 */}
       <nav className="sidebar">
         <h2 className="logo">철도 분실물<br />통합 관리 시스템</h2>
         
-        {/* 검색 메뉴 그룹 */}
         <div className="menu-section">
           <div className="menu-label">
             <IconMenuSearch /> 검색 메뉴
@@ -543,7 +539,6 @@ function App() {
           </div>
         </div>
 
-        {/* 관리/통계 메뉴 그룹 */}
         <div className="menu-section">
           <div className="menu-label">
             <IconMenu d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /> 
@@ -557,7 +552,6 @@ function App() {
           </div>
         </div>
 
-        {/* 기타 메뉴 그룹 */}
         <div className="menu-section">
           <div className="menu-label">
             <IconArchive /> 기타 메뉴
@@ -607,26 +601,35 @@ function App() {
                           <th style={{width: '15%'}}>등록일</th>
                         </tr>
                       </thead>
+                      {/* 🌟 빈 줄 채우기 적용된 tbody 🌟 */}
                       <tbody>
-                        {paginatedSearchItems.map(item => (
-                          <tr key={item.id} className="clickable-row" onClick={() => setSelectedItem(item)}>
-                            <td><span className={`status-badge ${getStatusClass(item.status)}`}>{item.status}</span></td>
-                            <td className="serial">{item.serialNumber || '-'}</td>
-                            <td>{item.main_category}</td>
-                            <td className="col-feature" title={cleanFeatureText(item)}>{cleanFeatureText(item)}</td>
-                            <td title={item.foundLocation}>{item.foundLocation}</td>
-                            <td>{new Date(item.registeredAt).toLocaleDateString()}</td>
-                          </tr>
-                        ))}
-                        {paginatedSearchItems.length === 0 && (
-                          <tr><td colSpan="6" style={{padding: '50px', color: '#94a3b8', textAlign: 'center'}}>검색 결과가 없습니다.</td></tr>
+                        {filteredItems.length === 0 ? (
+                          <tr><td colSpan="6" style={{height: '560px', color: '#94a3b8', textAlign: 'center'}}>검색 결과가 없습니다.</td></tr>
+                        ) : (
+                          [...Array(itemsPerPage)].map((_, index) => {
+                            const item = paginatedSearchItems[index];
+                            return item ? (
+                              <tr key={item.id} className="clickable-row" onClick={() => setSelectedItem(item)}>
+                                <td><span className={`status-badge ${getStatusClass(item.status)}`}>{item.status}</span></td>
+                                <td className="serial">{item.serialNumber || '-'}</td>
+                                <td>{item.main_category}</td>
+                                <td className="col-feature" title={cleanFeatureText(item)}>{cleanFeatureText(item)}</td>
+                                <td title={item.foundLocation}>{item.foundLocation}</td>
+                                <td>{new Date(item.registeredAt).toLocaleDateString()}</td>
+                              </tr>
+                            ) : (
+                              <tr key={`empty-${index}`} style={{ cursor: 'default', pointerEvents: 'none' }}>
+                                <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
                     {filteredItems.length > 0 ? (
                       <Pagination currentPage={searchPage} setCurrentPage={setSearchPage} totalItems={filteredItems.length} itemsPerPage={itemsPerPage} />
                     ) : (
-                      <div className="pagination"><button disabled>이전</button><button className="active">1</button><button disabled>다음</button></div>
+                      <div className="pagination"><button disabled>&lt;&lt;</button><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button><button disabled>&gt;&gt;</button></div>
                     )}
                   </>
                 )}
@@ -682,7 +685,6 @@ function App() {
               <section className="inquiry-section full-width-ai">
                 <div className="ai-header">
                   <h3>AI 스마트 검색</h3>
-                  <p>물품의 색상, 형태, 잃어버린 상황 등을 추상적으로 입력해도 유사한 보관 물품을 찾아냅니다.</p>
                 </div>
                 <div className="search-bar-wrapper ai-search-wrapper">
                   <div className="search-input-container">
@@ -1036,24 +1038,32 @@ function App() {
                       <th style={{width: '30%', padding: '15px'}}>일련번호</th>
                     </tr>
                   </thead>
+                  {/* 🌟 빈 줄 채우기 적용된 tbody 🌟 */}
                   <tbody>
-                    {paginatedTransferItems.length > 0 ? (
-                      paginatedTransferItems.map(item => (
-                        <tr key={item.id} style={{cursor: 'default', backgroundColor: '#fff'}}>
-                          <td style={{padding: '15px'}}>{item.main_category || '기타물품'}</td>
-                          <td style={{fontWeight: '700', color: '#334155', padding: '15px'}} title={cleanFeatureText(item)}>{cleanFeatureText(item)}</td>
-                          <td className="serial" style={{padding: '15px'}}>{item.serialNumber || '-'}</td>
-                        </tr>
-                      ))
+                    {currentTransferItems.length === 0 ? (
+                      <tr><td colSpan="3" style={{height: '560px', color: '#94a3b8', textAlign: 'center'}}>해당하는 이관 예정 물품이 없습니다.</td></tr>
                     ) : (
-                      <tr><td colSpan="3" style={{padding: '60px', color: '#94a3b8', textAlign: 'center'}}>해당하는 이관 예정 물품이 없습니다.</td></tr>
+                      [...Array(itemsPerPage)].map((_, index) => {
+                        const item = paginatedTransferItems[index];
+                        return item ? (
+                          <tr key={item.id} style={{cursor: 'default', backgroundColor: '#fff'}}>
+                            <td style={{padding: '15px'}}>{item.main_category || '기타물품'}</td>
+                            <td style={{fontWeight: '700', color: '#334155', padding: '15px'}} title={cleanFeatureText(item)}>{cleanFeatureText(item)}</td>
+                            <td className="serial" style={{padding: '15px'}}>{item.serialNumber || '-'}</td>
+                          </tr>
+                        ) : (
+                          <tr key={`empty-${index}`} style={{ cursor: 'default', backgroundColor: '#fff', pointerEvents: 'none' }}>
+                            <td style={{padding: '15px'}}>&nbsp;</td><td></td><td></td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
                 {currentTransferItems.length > 0 ? (
                   <Pagination currentPage={transferPage} setCurrentPage={setTransferPage} totalItems={currentTransferItems.length} itemsPerPage={itemsPerPage} />
                 ) : (
-                  <div className="pagination"><button disabled>이전</button><button className="active">1</button><button disabled>다음</button></div>
+                  <div className="pagination"><button disabled>&lt;&lt;</button><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button><button disabled>&gt;&gt;</button></div>
                 )}
               </div>
             </div>
@@ -1093,42 +1103,48 @@ function App() {
                     <th style={{ width: '23%' }}>AI 검증 결과</th>
                   </tr>
                 </thead>
+                {/* 🌟 빈 줄 채우기 적용된 tbody 🌟 */}
                 <tbody>
-                  {paginatedClaims.length > 0 ? (
-                    paginatedClaims.map(claim => (
-                      <tr key={claim.id} style={{ backgroundColor: claim.status === '의심물품 발견' ? '#fff1f2' : '#fff' }}>
-                        <td>
-                          <span className={`status-badge ${claim.status === '의심물품 발견' ? 'status-discard' : 'status-default'}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                            {claim.status === '의심물품 발견' && <IconAlert />}
-                            {claim.status}
-                          </span>
-                        </td>
-                        <td>{new Date(claim.registeredAt).toLocaleDateString()}</td>
-                        <td style={{ fontWeight: '700', color: '#1e293b' }} title={claim.itemName}>{claim.itemName}</td>
-                        <td style={{ fontSize: '13px', color: '#475569', textAlign: 'left' }} title={claim.itemInfo}>{claim.itemInfo}</td>
-                        <td style={{ fontSize: '13px', textAlign: 'left' }} title={claim.aiReason || '대조 대기 중'}>
-                          {claim.status === '의심물품 발견' ? (
-                            <div style={{ color: '#e11d48' }}>
-                              <strong style={{ display: 'block', marginBottom: '4px' }}>[{claim.matchedFeature}] ({claim.aiConfidence}%)</strong>
-                              S/N: {claim.matchedSerial}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#94a3b8' }}>대조 대기 중</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                  {validClaims.length === 0 ? (
+                    <tr><td colSpan="5" style={{ height: '560px', color: '#94a3b8', textAlign: 'center' }}>최근 7일 내 접수된 고객 청구 내역이 없습니다.</td></tr>
                   ) : (
-                    <tr>
-                      <td colSpan="5" style={{ padding: '60px', color: '#94a3b8', textAlign: 'center' }}>최근 7일 내 접수된 고객 청구 내역이 없습니다.</td>
-                    </tr>
+                    [...Array(itemsPerPage)].map((_, index) => {
+                      const claim = paginatedClaims[index];
+                      return claim ? (
+                        <tr key={claim.id} style={{ backgroundColor: claim.status === '의심물품 발견' ? '#fff1f2' : '#fff' }}>
+                          <td>
+                            <span className={`status-badge ${claim.status === '의심물품 발견' ? 'status-discard' : 'status-default'}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                              {claim.status === '의심물품 발견' && <IconAlert />}
+                              {claim.status}
+                            </span>
+                          </td>
+                          <td>{new Date(claim.registeredAt).toLocaleDateString()}</td>
+                          <td style={{ fontWeight: '700', color: '#1e293b' }} title={claim.itemName}>{claim.itemName}</td>
+                          <td style={{ fontSize: '13px', color: '#475569', textAlign: 'left' }} title={claim.itemInfo}>{claim.itemInfo}</td>
+                          <td style={{ fontSize: '13px', textAlign: 'left' }} title={claim.aiReason || '대조 대기 중'}>
+                            {claim.status === '의심물품 발견' ? (
+                              <div style={{ color: '#e11d48' }}>
+                                <strong style={{ display: 'block', marginBottom: '4px' }}>[{claim.matchedFeature}] ({claim.aiConfidence}%)</strong>
+                                S/N: {claim.matchedSerial}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>대조 대기 중</span>
+                            )}
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={`empty-${index}`} style={{ cursor: 'default', backgroundColor: '#fff', pointerEvents: 'none' }}>
+                          <td>&nbsp;</td><td></td><td></td><td></td><td></td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
               {validClaims.length > 0 ? (
                 <Pagination currentPage={claimPage} setCurrentPage={setClaimPage} totalItems={validClaims.length} itemsPerPage={itemsPerPage} />
               ) : (
-                <div className="pagination"><button disabled>이전</button><button className="active">1</button><button disabled>다음</button></div>
+                <div className="pagination"><button disabled>&lt;&lt;</button><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button><button disabled>&gt;&gt;</button></div>
               )}
             </div>
           </div>
