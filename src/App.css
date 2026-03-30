@@ -1,0 +1,248 @@
+/* src/App.css */
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&display=swap');
+
+/* =========================================
+   1. 기초 설정 & 공통 클래스
+========================================= */
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+html, body { background-color: #f8fafc; width: 100%; height: 100%; color: #334155; }
+.admin-container { display: flex; width: 100vw; min-height: 100vh; }
+
+.mt-20 { margin-top: 20px; }
+.mb-50 { margin-bottom: 50px; }
+.p-20 { padding: 20px; }
+.p-50 { padding: 50px; }
+.bg-white { background-color: #fff; }
+.font-bold { font-weight: 700; }
+.font-13 { font-size: 13.5px; }
+.text-left { text-align: left !important; }
+.text-center { text-align: center !important; }
+.text-gray { color: #94a3b8; }
+
+/* =========================================
+   2. 사이드바 (Sidebar) - 플랫 구조 개편
+========================================= */
+.sidebar { 
+  width: 280px; background-color: #f0f7ff; padding: 60px 24px; 
+  flex-shrink: 0; height: 100vh; position: sticky; top: 0; border-right: 1px solid #d1e9ff;
+}
+.logo { 
+  font-size: 24px; font-weight: 900; color: #0ea5e9; 
+  margin-bottom: 50px; text-align: center; letter-spacing: -1px; line-height: 1.4; white-space: nowrap;
+}
+
+/* 메뉴 그룹 간격 */
+.menu-section { margin-bottom: 35px; display: flex; flex-direction: column; gap: 8px; width: 100%; }
+
+/* 🌟 메인메뉴 레이블 (가운데 정렬, 큰 글자, 돋보기 아이콘 적용) */
+.menu-label {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: #1e293b; font-size: 18px; font-weight: 800; padding-bottom: 12px;
+  border-bottom: 2px solid #e0f2fe; margin-bottom: 5px; cursor: default;
+}
+.menu-label svg { stroke: #0ea5e9; stroke-width: 2.5; }
+
+/* 🌟 하위메뉴 (크기 딱 맞게 100%, 가운데 정렬, 글자크기 살짝 작게) */
+.menu-item {
+  width: 100%; height: 48px; border-radius: 12px; cursor: pointer;
+  color: #64748b; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  transition: 0.2s; background-color: #ffffff; border: 1px solid #e0f2fe; padding: 0 20px;
+}
+.menu-item:hover { background-color: #e0f2fe; color: #0ea5e9; border-color: #bae6fd; }
+.menu-item.active { background-color: #0ea5e9; color: white; border-color: #0ea5e9; }
+
+/* =========================================
+   3. 메인 콘텐츠 & 표 고정 레이아웃
+========================================= */
+.main-content { flex: 1; display: flex; flex-direction: column; padding: 50px 60px; align-items: center; }
+
+/* 표 크기 고정 및 말줄임표 처리 */
+.fixed-layout { table-layout: fixed; width: 100%; }
+.data-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.table-container { width: 100%; max-width: 1200px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+.data-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+.data-table th { background-color: #f8fafc; color: #94a3b8; font-size: 13px; font-weight: 700; border-bottom: 1px solid #e2e8f0; padding: 18px 15px; text-align: center; }
+.data-table td { padding: 18px 15px; text-align: center; border-bottom: 1px solid #f1f5f9; font-size: 14.5px; }
+
+.clickable-row:hover { background-color: #f8faff; cursor: pointer; }
+
+/* =========================================
+   4. 검색 영역 (통합/스마트 검색창 너비 100% 복구)
+========================================= */
+/* 너비 100% 꽉 채워서 작아짐 방지 */
+.inquiry-section { width: 100%; max-width: 1000px; margin-bottom: 40px; }
+.full-width-ai { max-width: 1100px !important; }
+
+.search-input-container { position: relative; flex: 1; display: flex; align-items: center; width: 100%; }
+.main-search-input { width: 100%; padding: 18px 50px 18px 55px; font-size: 16px; border: 1px solid #cbd5e1; border-radius: 50px; background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.02); outline: none; transition: 0.2s; }
+.main-search-input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1); }
+
+.search-icon-svg { position: absolute; left: 22px; width: 20px; height: 20px; stroke: #94a3b8; stroke-width: 2.5; fill: none; z-index: 10; }
+.search-clear-btn { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; color: #cbd5e1; cursor: pointer; }
+
+.search-bar-wrapper { display: flex; gap: 12px; width: 100%; align-items: center; }
+.filter-open-btn { display: flex; align-items: center; gap: 8px; padding: 0 25px; height: 56px; border-radius: 50px; border: 1px solid #cbd5e1; background: white; color: #475569; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+.filter-open-btn:hover { border-color: #0ea5e9; color: #0ea5e9; }
+
+/* AI 검색 버튼 */
+.ai-search-wrapper { flex-direction: column; gap: 15px; width: 100%; }
+.ai-search-btn { width: 100%; padding: 18px; background-color: #0ea5e9; color: white; border-radius: 50px; font-weight: 800; font-size: 16px; border: none; cursor: pointer; transition: 0.2s; }
+.ai-search-btn:hover { background-color: #0284c7; }
+
+/* =========================================
+   5. 페이지네이션 & 기타 UI
+========================================= */
+.pagination { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 25px 0; }
+.pagination button { padding: 8px 14px; border: 1px solid #e2e8f0; background: white; border-radius: 8px; cursor: pointer; color: #64748b; font-weight: 600; font-size: 14px; transition: 0.2s; }
+.pagination button:hover:not(:disabled) { background: #f1f5f9; color: #0ea5e9; border-color: #cbd5e1; }
+.pagination button.active { background: #0ea5e9; color: white; border-color: #0ea5e9; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.status-badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 800; }
+.status-storage { background-color: #e0f2fe; color: #0369a1; }
+.status-discard { background-color: #fee2e2; color: #b91c1c; }
+
+.ai-match-badge { display: inline-block; background-color: #f0f9ff; color: #0ea5e9; padding: 6px 14px; border-radius: 8px; font-weight: 800; border: 1px solid #bae6fd; }
+
+/* =========================================
+   6. 상세보기 화면 (Detail View)
+========================================= */
+.detail-view { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 20px; }
+.detail-header { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; height: 50px; }
+.back-btn { position: absolute; left: 0; padding: 12px 24px; border-radius: 50px; border: 1px solid #cbd5e1; background: white; color: #475569; font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.2s; }
+.back-btn:hover { border-color: #0ea5e9; color: #0ea5e9; }
+.detail-title { font-size: 24px; font-weight: 800; color: #1e293b; }
+
+.detail-container { display: flex; gap: 40px; background: white; padding: 40px; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+.detail-image-box { flex: 0 0 420px; height: 450px; background: #f8fafc; border-radius: 16px; display: flex; justify-content: center; align-items: center; border: 1px solid #e2e8f0; overflow: hidden; }
+.detail-image-box img { width: 100%; height: 100%; object-fit: cover; }
+.no-image { color: #94a3b8; font-weight: 600; font-size: 16px; }
+.detail-info { flex: 1; display: flex; flex-direction: column; gap: 25px; }
+.detail-main-title { font-size: 28px; font-weight: 800; color: #0f172a; margin-top: 5px; }
+
+.info-grid { display: grid; grid-template-columns: 90px 1fr; gap: 14px 20px; font-size: 15px; }
+.info-label { color: #64748b; font-weight: 700; }
+.info-value { color: #1e293b; font-weight: 600; }
+
+.detail-section { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+.detail-section h4 { color: #0ea5e9; font-size: 14px; margin-bottom: 10px; font-weight: 800; }
+.detail-section p { color: #475569; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.pi-section { background: #fff1f2; border-color: #ffe4e6; }
+.pi-section h4 { color: #e11d48; }
+
+/* =========================================
+   7. 필터 드로어 (Filter Drawer)
+========================================= */
+.drawer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 1000; opacity: 0; visibility: hidden; transition: 0.3s; }
+.drawer-overlay.open { opacity: 1; visibility: visible; }
+.filter-drawer { position: fixed; top: 0; right: -420px; width: 420px; height: 100vh; background: white; z-index: 1001; box-shadow: -5px 0 30px rgba(0,0,0,0.1); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+.filter-drawer.open { right: 0; }
+.drawer-header { padding: 30px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+.drawer-header h3 { font-size: 20px; font-weight: 800; color: #1e293b; }
+.close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: #94a3b8; }
+.drawer-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 35px; }
+.filter-section h4 { font-size: 15px; font-weight: 800; color: #475569; margin-bottom: 15px; }
+.filter-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.f-btn { padding: 10px 16px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #64748b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+.f-btn.active { background: #0ea5e9; color: white; border-color: #0ea5e9; }
+.category-select { width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; color: #334155; font-size: 15px; font-weight: 600; font-family: inherit; outline: none; cursor: pointer; }
+.date-inputs { display: flex; align-items: center; gap: 10px; }
+.date-inputs input { flex: 1; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; color: #475569; font-family: inherit; outline: none; }
+.drawer-footer { padding: 20px 30px; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; }
+.reset-btn { flex: 1; padding: 15px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; color: #64748b; font-weight: 700; cursor: pointer; transition: 0.2s; }
+.apply-btn { flex: 2; padding: 15px; border-radius: 12px; border: none; background: #0ea5e9; color: white; font-weight: 800; cursor: pointer; font-size: 16px; transition: 0.2s; }
+
+/* =========================================
+   8. 대시보드 카드 (관리)
+========================================= */
+.manage-dashboard { width: 100%; max-width: 1100px; display: flex; flex-direction: column; }
+.dashboard-header { margin-bottom: 25px; }
+.dashboard-title { font-size: 26px; font-weight: 800; color: #1e293b; }
+.monthly-summary-container { display: flex; gap: 24px; margin-bottom: 40px; }
+.monthly-summary-box { flex: 1; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+.monthly-icon-box { width: 50px; height: 50px; border-radius: 12px; display: flex; justify-content: center; align-items: center; }
+.monthly-text { display: flex; flex-direction: column; gap: 4px; }
+.monthly-label { font-size: 14px; font-weight: 700; color: #64748b; }
+.monthly-value { font-size: 28px; font-weight: 900; letter-spacing: -1px; }
+.monthly-value span { font-size: 16px; font-weight: 600; color: #94a3b8; margin-left: 4px; }
+.monthly-value.storage { color: #0ea5e9; }
+.monthly-value.discard { color: #f43f5e; }
+
+.stats-cards-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.stat-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.03); display: flex; flex-direction: column; overflow: hidden; }
+.stat-card-header { padding: 24px 24px 20px 24px; border-bottom: 2px solid #f8fafc; }
+.stat-card-header h3 { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 800; color: #334155; }
+.total-count { font-size: 38px; font-weight: 900; letter-spacing: -1px; }
+.total-count span { font-size: 18px; font-weight: 700; color: #94a3b8; margin-left: 6px; }
+.card-storage .total-count { color: #0ea5e9; }
+.stat-card-body { padding: 20px 24px 24px 24px; display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; -ms-overflow-style: none; scrollbar-width: none; }
+.stat-row { display: flex; justify-content: space-between; align-items: center; background-color: #f8fafc; padding: 12px 16px; border-radius: 10px; }
+.stat-cat-name { font-size: 14px; font-weight: 700; color: #475569; }
+.stat-cat-count { font-size: 15px; font-weight: 800; color: #1e293b; background: white; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
+
+/* =========================================
+   9. 통계 대시보드
+========================================= */
+.stats-dashboard-container { width: 100%; max-width: 1100px; display: flex; flex-direction: column; }
+.stats-tabs { display: flex; gap: 12px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px; }
+.stat-tab-btn { background: none; border: none; padding: 12px 24px; font-size: 16px; font-weight: 700; color: #94a3b8; cursor: pointer; transition: 0.2s; position: relative; bottom: -2px; }
+.stat-tab-btn.active { color: #0ea5e9; border-bottom: 3px solid #0ea5e9; }
+.stat-tab-content { display: flex; flex-direction: column; gap: 24px; animation: fadeIn 0.3s ease-out; }
+.grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.chart-box { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.02); display: flex; flex-direction: column; }
+.chart-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.chart-header-row h3, .chart-box h3 { font-size: 16px; font-weight: 800; color: #334155; margin: 0; margin-bottom: 20px; }
+.chart-wrapper { width: 100%; position: relative; }
+.empty-chart { text-align: center; color: #94a3b8; padding: 40px 0; font-weight: 600; }
+
+.timeframe-select {
+  appearance: none; padding: 10px 40px 10px 18px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; color: #334155; font-size: 14px; outline: none; background-color: #f8fafc; cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+}
+
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.kpi-card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 8px; }
+.kpi-label { font-size: 14px; font-weight: 700; color: #64748b; }
+.kpi-value { font-size: 32px; font-weight: 900; color: #1e293b; letter-spacing: -1px; }
+.kpi-trend { font-size: 13px; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: inline-block; width: max-content; }
+.kpi-trend.up { background: #dcfce7; color: #15803d; }
+.kpi-trend.down { background: #fee2e2; color: #e11d48; }
+
+.detailed-category-container { display: flex; gap: 40px; align-items: flex-start; margin-top: 10px; }
+.pie-section { flex: 0 0 350px; display: flex; flex-direction: column; }
+.rate-grid-section { flex: 1; display: flex; flex-direction: column; }
+.sub-title { font-size: 14px; font-weight: 700; color: #64748b; margin-bottom: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
+.return-rate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px; }
+.rate-item { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.rate-cat { font-size: 12px; font-weight: 700; color: #475569; text-align: center; word-break: keep-all; }
+.rate-val { font-size: 16px; font-weight: 900; }
+
+/* =========================================
+   10. 청구 분실물 접수 (입력 폼)
+========================================= */
+.claim-input-section { background-color: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 30px; margin-bottom: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+.claim-input-section h3 { font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 20px; }
+.claim-form { display: flex; flex-direction: column; gap: 16px; }
+.claim-input { width: 100%; padding: 16px 20px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 10px; outline: none; transition: 0.2s; color: #334155; }
+.claim-textarea { width: 100%; padding: 16px 20px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 10px; outline: none; transition: 0.2s; min-height: 120px; resize: vertical; color: #334155; font-family: inherit; }
+.claim-submit-btn { padding: 16px; background-color: #1e293b; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+.claim-submit-btn:hover { background-color: #0f172a; }
+
+.claim-action-section { display: flex; justify-content: space-between; align-items: center; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 16px; padding: 24px 30px; margin-bottom: 30px; }
+.action-text h3 { color: #0369a1; font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+.action-text p { color: #0c4a6e; font-size: 14px; margin: 0; }
+.claim-ai-btn { padding: 14px 28px; background-color: #0ea5e9; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(14, 165, 233, 0.2); }
+.claim-ai-btn:disabled { background-color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+.ai-header { margin-bottom: 20px; }
+.ai-header h3 { color: #1e293b; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+.ai-header p { color: #64748b; font-size: 15px; }
+.ai-loading-container { text-align: center; padding: 80px 0; }
+.ai-spinner { margin: 0 auto 20px auto; width: 45px; height: 45px; border: 4px solid #e2e8f0; border-top: 4px solid #0ea5e9; border-radius: 50%; animation: spin 1s linear infinite; }
+.ai-loading-text { color: #0ea5e9; font-weight: 700; font-size: 16px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
