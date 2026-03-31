@@ -377,8 +377,20 @@ function App() {
   const imminentStats = getStatsFromList(d1Items);
   const claimStats = { total: validClaims.length, byCategory: {} };
 
+  // 🌟 [안전 장치] 날짜가 비어있거나 이상한 형식일 때 앱이 튕기는(하얀 화면) 현상 방지 코드 추가 완료
   let currReg=0, currRet=0, currDis=0, prevReg=0, prevRet=0, prevDis=0, labelCurr='', labelPrev='', chartTitle='';
   let chartData = [];
+
+  const getSafeIndex = (dateString, type) => {
+    if (!dateString) return -1;
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return -1;
+    if (type === 'daily') return d.getDate() - 1;
+    if (type === 'monthly') return d.getMonth();
+    if (type === 'yearly') return d.getFullYear() - (thisYear - 4);
+    return -1;
+  };
+
   if (timeframe === 'daily') {
     labelCurr = '오늘'; labelPrev = '어제'; chartTitle = `${thisMonth + 1}월 일별 접수 및 처리 추이`;
     chartData = Array.from({length: new Date(thisYear, thisMonth + 1, 0).getDate()}, (_, i) => ({ name: `${i+1}일`, 접수:0, 반환:0, 이관:0 }));
@@ -387,9 +399,13 @@ function App() {
       if (isTargetDay(item.registeredAt, today)) currReg++; if (isTargetDay(item.registeredAt, yesterday)) prevReg++;
       if (item.status === '반환완료') { if (isTargetDay(actionDate, today)) currRet++; if (isTargetDay(actionDate, yesterday)) prevRet++; }
       if (item.status === '폐기/이관') { if (isTargetDay(actionDate, today)) currDis++; if (isTargetDay(actionDate, yesterday)) prevDis++; }
-      if (isTargetMonth(item.registeredAt, thisYear, thisMonth)) chartData[new Date(item.registeredAt).getDate() - 1].접수++;
-      if (item.status === '반환완료' && isTargetMonth(actionDate, thisYear, thisMonth)) chartData[new Date(actionDate).getDate() - 1].반환++;
-      if (item.status === '폐기/이관' && isTargetMonth(actionDate, thisYear, thisMonth)) chartData[new Date(actionDate).getDate() - 1].이관++;
+      
+      const regIdx = getSafeIndex(item.registeredAt, 'daily');
+      const actIdx = getSafeIndex(actionDate, 'daily');
+      
+      if (isTargetMonth(item.registeredAt, thisYear, thisMonth) && chartData[regIdx]) chartData[regIdx].접수++;
+      if (item.status === '반환완료' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].반환++;
+      if (item.status === '폐기/이관' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].이관++;
     });
   } else if (timeframe === 'monthly') {
     labelCurr = '이번 달'; labelPrev = '지난달'; chartTitle = `${thisYear}년 월별 접수 및 처리 추이`;
@@ -399,9 +415,13 @@ function App() {
       if (isTargetMonth(item.registeredAt, thisYear, thisMonth)) currReg++; if (isTargetMonth(item.registeredAt, lastMonthYear, lastMonthIdx)) prevReg++;
       if (item.status === '반환완료') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currRet++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevRet++; }
       if (item.status === '폐기/이관') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currDis++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevDis++; }
-      if (isTargetYear(item.registeredAt, thisYear)) chartData[new Date(item.registeredAt).getMonth()].접수++;
-      if (item.status === '반환완료' && isTargetYear(actionDate, thisYear)) chartData[new Date(actionDate).getMonth()].반환++;
-      if (item.status === '폐기/이관' && isTargetYear(actionDate, thisYear)) chartData[new Date(actionDate).getMonth()].이관++;
+      
+      const regIdx = getSafeIndex(item.registeredAt, 'monthly');
+      const actIdx = getSafeIndex(actionDate, 'monthly');
+
+      if (isTargetYear(item.registeredAt, thisYear) && chartData[regIdx]) chartData[regIdx].접수++;
+      if (item.status === '반환완료' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].반환++;
+      if (item.status === '폐기/이관' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].이관++;
     });
   } else {
     labelCurr = '올해'; labelPrev = '전년도'; chartTitle = `최근 5년 접수 및 처리 추이`;
@@ -412,10 +432,13 @@ function App() {
       if (isTargetYear(item.registeredAt, thisYear)) currReg++; if (isTargetYear(item.registeredAt, thisYear - 1)) prevReg++;
       if (item.status === '반환완료') { if (isTargetYear(actionDate, thisYear)) currRet++; if (isTargetYear(actionDate, thisYear - 1)) prevRet++; }
       if (item.status === '폐기/이관') { if (isTargetYear(actionDate, thisYear)) currDis++; if (isTargetYear(actionDate, thisYear - 1)) prevDis++; }
-      const regYear = new Date(item.registeredAt).getFullYear(); const actYear = new Date(actionDate).getFullYear();
-      if (regYear >= startYear && regYear <= thisYear) chartData[regYear - startYear].접수++;
-      if (item.status === '반환완료' && actYear >= startYear && actYear <= thisYear) chartData[actYear - startYear].반환++;
-      if (item.status === '폐기/이관' && actYear >= startYear && actYear <= thisYear) chartData[actYear - startYear].이관++;
+      
+      const regIdx = getSafeIndex(item.registeredAt, 'yearly');
+      const actIdx = getSafeIndex(actionDate, 'yearly');
+
+      if (chartData[regIdx]) chartData[regIdx].접수++;
+      if (item.status === '반환완료' && chartData[actIdx]) chartData[actIdx].반환++;
+      if (item.status === '폐기/이관' && chartData[actIdx]) chartData[actIdx].이관++;
     });
   }
 
