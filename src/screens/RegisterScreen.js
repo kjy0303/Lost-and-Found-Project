@@ -76,7 +76,22 @@ const analyzeWithVisionAPI = async (base64Image) => {
 };
 
 const formatWithGemini = async (visionRawData, base64Image) => {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
+
+  const cleanBase64 = String(base64Image || "")
+    .trim()
+    .replace(/^data:image\/\w+;base64,/, "")
+    .replace(/\s/g, "");
+
+  if (!GEMINI_KEY) {
+    throw new Error("Gemini API 키가 없습니다. EAS 환경변수를 확인하세요.");
+  }
+
+  if (!cleanBase64) {
+    throw new Error("이미지 base64 데이터가 비어 있습니다.");
+  }
+
+  const visionText = JSON.stringify(visionRawData || {}).slice(0, 6000);
   
   const promptText = `
   사진과 Vision 데이터를 반드시 교차 검증해.
@@ -123,15 +138,52 @@ const formatWithGemini = async (visionRawData, base64Image) => {
   }
   `;
 
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: cleanBase64
+            }
+          },
+          {
+            text: promptText
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      responseMimeType: "application/json"
+    }
+  };
+
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: promptText }, { inline_data: { mime_type: "image/jpeg", data: base64Image.trim().replace(/^data:image\/\w+;base64,/, "") } }] }],
-      generationConfig: { responseMimeType: "application/json" }
-    }),
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_KEY
+    },
+    body: JSON.stringify(requestBody)
   });
-  return (await response.json()).candidates[0].content.parts[0].text;
+
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    throw new Error(
+      `Gemini 오류 ${response.status}: ${data.error?.status || ""} / ${data.error?.message || JSON.stringify(data).slice(0, 700)}`
+    );
+  }
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!text) {
+    throw new Error(`Gemini 응답 없음: ${JSON.stringify(data).slice(0, 700)}`);
+  }
+
+  return text;
 };
 
 const generateSerialNumber = (categoryName) => {
@@ -233,10 +285,11 @@ export default function RegisterScreen() {
       
       setSpecialNote("");
       setViewState('result');
-    } catch (e) {
-      Alert.alert("분석 실패", "오류가 발생했습니다. 다시 촬영해 주세요.");
-      setViewState('camera');
-    }
+      } catch (e) {
+        console.log("AI 분석 오류:", e);
+        Alert.alert("분석 실패", String(e?.message || e).slice(0, 900));
+        setViewState('camera');
+      }
   };
 
   const handleUpdateAI = async () => {
