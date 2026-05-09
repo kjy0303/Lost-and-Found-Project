@@ -8,7 +8,6 @@ import {
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../firebaseConfig';
-import { extractNfcLocation, readNfcText } from '../utils/nfc';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,7 +32,6 @@ export default function ReturnScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editableData, setEditableData] = useState({});
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
-  const [nfcZoneResult, setNfcZoneResult] = useState(null);
 
   if (!permission) return <View />;
   if (!permission.granted) {
@@ -65,8 +63,7 @@ export default function ReturnScreen() {
         const docSnap = querySnapshot.docs[0];
         setItemData(docSnap.data());
         setItemDocId(docSnap.id);
-        setIsEditing(false);
-        setNfcZoneResult(null);
+        setIsEditing(false); 
         setViewState('result');
       }
     } catch (error) {
@@ -91,10 +88,8 @@ export default function ReturnScreen() {
     setViewState('scan');
     setScanned(false);
     setItemData(null);
-    setItemDocId(null);
     setSerialInput("");
     setIsEditing(false);
-    setNfcZoneResult(null);
   };
 
   // 🌟 6자리-4자리-4자리 자동 하이픈 로직 완벽 수정
@@ -174,77 +169,6 @@ export default function ReturnScreen() {
       Alert.alert("수정 완료", "분실물 정보가 성공적으로 수정되었습니다.");
     } catch (error) {
       Alert.alert("오류", "수정 사항을 저장하는데 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const normalizeZoneText = (value) => {
-    return String(value || '')
-      .replace(/\s/g, '')
-      .replace(/-/g, '')
-      .toUpperCase();
-  };
-
-  const getExpectedZone = () => {
-    return (
-      itemData?.storageZone ||
-      itemData?.nfcLocation ||
-      itemData?.storageLocation ||
-      itemData?.foundLocation ||
-      ''
-    );
-  };
-
-  const handleCheckNfcZone = async () => {
-    if (!itemData || !itemDocId) {
-      Alert.alert('알림', '먼저 QR 또는 일련번호로 물품을 조회해주세요.');
-      return;
-    }
-
-    const rawText = await readNfcText();
-    if (!rawText) return;
-
-    const zone = extractNfcLocation(rawText);
-    if (!zone) {
-      Alert.alert('구역 확인 실패', 'NFC 태그에서 구역 정보를 읽지 못했습니다.');
-      return;
-    }
-
-    const expectedZone = getExpectedZone();
-    const normalizedZone = normalizeZoneText(zone);
-    const normalizedExpected = normalizeZoneText(expectedZone);
-
-    let matched = null;
-    if (normalizedExpected) {
-      matched = normalizedExpected.includes(normalizedZone) || normalizedZone.includes(normalizedExpected);
-    }
-
-    const checkedAt = new Date().toISOString();
-    const result = { zone, rawText, expectedZone, matched, checkedAt };
-    setNfcZoneResult(result);
-
-    setLoading(true);
-    try {
-      const itemRef = doc(db, "lostItems", itemDocId);
-      await updateDoc(itemRef, {
-        lastNfcZone: zone,
-        lastNfcRawText: rawText,
-        lastNfcCheckAt: checkedAt,
-        nfcZoneMatched: matched,
-      });
-
-      if (matched === true) {
-        Alert.alert('구역 확인 완료', `${zone} 구역이 등록 정보와 일치합니다.`);
-      } else if (matched === false) {
-        Alert.alert('구역 불일치', `읽은 구역: ${zone}
-등록 정보: ${expectedZone || '없음'}`);
-      } else {
-        Alert.alert('구역 확인 완료', `${zone} 구역 NFC 태그를 확인했습니다.`);
-      }
-    } catch (error) {
-      console.log('NFC 구역 확인 저장 오류:', error);
-      Alert.alert('저장 오류', 'NFC 확인 기록 저장에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -414,41 +338,7 @@ export default function ReturnScreen() {
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>소분류</Text><Text style={styles.infoValue}>{itemData.sub_category}</Text></View>
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>습득일</Text><Text style={styles.infoValue}>{new Date(itemData.registeredAt).toLocaleString('ko-KR')}</Text></View>
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>장소</Text><Text style={styles.infoValue}>{itemData.foundLocation}</Text></View>
-
-                  <View style={styles.nfcZoneBox}>
-                    <View style={styles.nfcZoneHeader}>
-                      <View style={styles.nfcIconCircle}>
-                        <Ionicons name="radio-outline" size={22} color="#1A237E" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.nfcZoneTitle}>NFC 구역확인</Text>
-                        <Text style={styles.nfcZoneSubText}>보관 구역 NFC 스티커를 태그해 위치를 확인합니다.</Text>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity style={styles.nfcZoneButton} onPress={handleCheckNfcZone}>
-                      <Ionicons name="scan-outline" size={18} color="#fff" />
-                      <Text style={styles.nfcZoneButtonText}>NFC로 구역 확인</Text>
-                    </TouchableOpacity>
-
-                    {nfcZoneResult && (
-                      <View style={styles.nfcResultBox}>
-                        <Text style={styles.nfcResultLabel}>마지막 확인 구역</Text>
-                        <Text style={styles.nfcResultZone}>{nfcZoneResult.zone}</Text>
-                        <Text style={[
-                          styles.nfcResultStatus,
-                          nfcZoneResult.matched === false && { color: '#D32F2F' },
-                          nfcZoneResult.matched === true && { color: '#2E7D32' }
-                        ]}>
-                          {nfcZoneResult.matched === true
-                            ? '등록 정보와 일치합니다.'
-                            : nfcZoneResult.matched === false
-                              ? `등록 정보와 다릅니다. 등록 정보: ${nfcZoneResult.expectedZone || '없음'}`
-                              : '등록된 보관 구역이 없어 확인 기록만 저장했습니다.'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                  <View style={styles.infoRow}><Text style={styles.infoLabel}>보관구역</Text><Text style={styles.infoValue}>{itemData.storageZone || '없음'}</Text></View>
                   
                   <View style={styles.divider} />
                   <Text style={styles.sectionTitle}>상세 묘사</Text>
@@ -561,18 +451,6 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', marginBottom: 10 },
   infoLabel: { width: 80, fontSize: 15, color: '#888', fontWeight: '600' },
   infoValue: { flex: 1, fontSize: 16, color: '#333' },
-
-  nfcZoneBox: { backgroundColor: '#F0F4FF', borderRadius: 14, padding: 14, marginTop: 14, marginBottom: 6, borderWidth: 1, borderColor: '#DCE3FF' },
-  nfcZoneHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
-  nfcIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E1E8FF', justifyContent: 'center', alignItems: 'center' },
-  nfcZoneTitle: { fontSize: 16, fontWeight: '800', color: '#1A237E', marginBottom: 3 },
-  nfcZoneSubText: { fontSize: 12, color: '#666', lineHeight: 17 },
-  nfcZoneButton: { backgroundColor: '#1A237E', borderRadius: 10, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  nfcZoneButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  nfcResultBox: { backgroundColor: '#fff', borderRadius: 10, padding: 12, marginTop: 12 },
-  nfcResultLabel: { fontSize: 12, color: '#777', marginBottom: 4, fontWeight: '600' },
-  nfcResultZone: { fontSize: 18, color: '#1A237E', fontWeight: '900', marginBottom: 4 },
-  nfcResultStatus: { fontSize: 13, color: '#555', lineHeight: 18, fontWeight: '600' },
   
   divider: { height: 1, backgroundColor: '#eee', marginVertical: 20 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1A237E', marginBottom: 10 },

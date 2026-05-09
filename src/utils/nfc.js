@@ -1,80 +1,76 @@
-import { Alert, Platform } from 'react-native';
 import NfcManager, { Ndef, NfcTech } from 'react-native-nfc-manager';
 
-let nfcStarted = false;
+let started = false;
 
-export async function initNfc() {
+export const initNfc = async () => {
+  if (started) return true;
+
   const supported = await NfcManager.isSupported();
-
   if (!supported) {
-    return {
-      supported: false,
-      enabled: false,
-      message: '이 기기는 NFC를 지원하지 않습니다.',
-    };
+    throw new Error('이 기기는 NFC를 지원하지 않습니다.');
   }
 
-  if (!nfcStarted) {
-    await NfcManager.start();
-    nfcStarted = true;
-  }
+  await NfcManager.start();
+  started = true;
+  return true;
+};
 
-  const enabled = await NfcManager.isEnabled();
-
-  return {
-    supported: true,
-    enabled,
-    message: enabled ? 'NFC 사용 가능' : 'NFC가 꺼져 있습니다.',
-  };
-}
-
-export function extractNfcLocation(text) {
-  const value = String(text || '').trim();
-  if (!value) return '';
-
-  if (value.toUpperCase().startsWith('LAF_LOC:')) {
-    return value.split(':').slice(1).join(':').trim().toUpperCase();
-  }
-
-  return value.toUpperCase();
-}
-
-export async function readNfcText() {
+const decodeNdefTextRecord = (record) => {
   try {
-    const state = await initNfc();
-
-    if (!state.supported) {
-      Alert.alert('NFC 미지원', state.message);
-      return null;
+    if (record?.type && Array.isArray(record.type)) {
+      const typeText = String.fromCharCode(...record.type);
+      if (typeText !== 'T') return '';
     }
 
-    if (!state.enabled) {
-      Alert.alert('NFC 꺼짐', '휴대폰 설정에서 NFC를 켜주세요.');
-      if (Platform.OS === 'android') {
-        await NfcManager.goToNfcSetting();
-      }
-      return null;
-    }
+    const payload = record?.payload;
+    if (!payload || !Array.isArray(payload) || payload.length < 3) return '';
 
-    Alert.alert('NFC 구역확인', '휴대폰 뒷면을 NFC 스티커에 가까이 대주세요.');
-
-    await NfcManager.requestTechnology(NfcTech.Ndef);
-    const tag = await NfcManager.getTag();
-    const record = tag?.ndefMessage?.[0];
-
-    if (!record?.payload) {
-      Alert.alert('읽기 실패', 'NFC 태그 안에 읽을 수 있는 데이터가 없습니다.');
-      return null;
-    }
-
-    return Ndef.text.decodePayload(record.payload);
+    const languageCodeLength = payload[0] & 0x3f;
+    const textBytes = payload.slice(1 + languageCodeLength);
+    return Ndef.util.bytesToString(textBytes);
   } catch (error) {
-    console.log('NFC 읽기 오류:', error);
-    Alert.alert('NFC 읽기 실패', '태그를 읽는 중 문제가 발생했습니다.');
-    return null;
-  } finally {
-    try {
-      await NfcManager.cancelTechnologyRequest();
-    } catch (e) {}
+    return '';
   }
-}
+};
+
+export const extractNfcLocation = (rawText = '') => {
+  const text = String(rawText || '').trim();
+  if (!text) return '';
+
+  const patterns = [
+    /^LAF_LOC\s*:\s*(.+)$/i,
+    /^LAF_ZONE\s*:\s*(.+)$/i,
+    /^ZONE\s*:\s*(.+)$/i,
+    /^LOC\s*:\s*(.+)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+
+  return text;
+};
+
+export const readNfcText = async () => {
+  await initNfc();
+
+  try {
+    await NfcManager.requestTechnology(NfcTech.Ndef, {
+      alertMessage: '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
+    });
+
+    const tag = await NfcManager.getTag();
+    const records = tag?.ndefMessage || [];
+    const textRecords = records.map(decodeNdefTextRecord).filter(Boolean);
+    const text = textRecords[0] || '';
+
+    if (!text) {
+      throw new Error('NFC 태그에서 구역 정보를 읽지 못했습니다.');
+    }
+
+    return text;
+  } finally {
+    NfcManager.cancelTechnologyRequest().catch(() => {});
+  }
+};
