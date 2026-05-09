@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "lostandfoundproject",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kjy0303.LostAndFoundProject",
