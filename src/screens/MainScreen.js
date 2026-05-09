@@ -19,6 +19,7 @@ import { db } from '../../firebaseConfig';
 
 const { width } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
+const REGISTER_ICON = require('../assets/lost-and-found-icon.png');
 
 export default function MainScreen() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function MainScreen() {
     { id: 'Zone', title: '구역 등록', image: NFC_ZONE_ICON, route: '/zone' },
     { id: 'Inquiry', title: '분실물 조회', icon: 'search', color: '#1A237E', route: '/inquiry' },
     { id: 'Return', title: '확인 및 반환', icon: 'qr-code', color: '#1A237E', route: '/return' },
-    { id: 'History', title: '등록/반환 기록', icon: 'time', color: '#1A237E', route: '/history' },
+    { id: 'History', title: '기록 관리', icon: 'time', color: '#1A237E', route: '/history' },
   ];
 
   const handleDeleteAllData = async () => {
@@ -90,12 +91,9 @@ export default function MainScreen() {
           activeOpacity={0.78}
           onPress={() => router.push('/register')}
         >
-          <View style={styles.registerIconCircle}>
-            <Ionicons name="camera" size={34} color="#1A237E" />
-          </View>
+          <Image source={REGISTER_ICON} style={styles.registerMenuImage} resizeMode="contain" />
           <View style={styles.registerTextBox}>
             <Text style={styles.registerTitle}>분실물 등록</Text>
-            <Text style={styles.registerSubtitle}>사진 촬영 후 AI 분석으로 빠르게 등록</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#1A237E" />
         </TouchableOpacity>
@@ -177,11 +175,11 @@ const styles = StyleSheet.create({
   menuArea: { paddingHorizontal: 24, paddingBottom: 10 },
   registerWideCard: {
     width: '100%',
-    minHeight: 92,
+    minHeight: 82,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
@@ -191,18 +189,13 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4
   },
-  registerIconCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#F0F4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15
+  registerMenuImage: {
+    width: 64,
+    height: 64,
+    marginRight: 16
   },
   registerTextBox: { flex: 1 },
-  registerTitle: { fontSize: 19, fontWeight: '900', color: '#1A237E', marginBottom: 4 },
-  registerSubtitle: { fontSize: 13, fontWeight: '600', color: '#777', lineHeight: 18 },
+  registerTitle: { fontSize: 20, fontWeight: '900', color: '#1A237E' },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

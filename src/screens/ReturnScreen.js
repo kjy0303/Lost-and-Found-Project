@@ -338,7 +338,7 @@ export default function ReturnScreen() {
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>소분류</Text><Text style={styles.infoValue}>{itemData.sub_category}</Text></View>
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>습득일</Text><Text style={styles.infoValue}>{new Date(itemData.registeredAt).toLocaleString('ko-KR')}</Text></View>
                   <View style={styles.infoRow}><Text style={styles.infoLabel}>장소</Text><Text style={styles.infoValue}>{itemData.foundLocation}</Text></View>
-                  <View style={styles.infoRow}><Text style={styles.infoLabel}>보관구역</Text><Text style={styles.infoValue}>{itemData.storageZone || '없음'}</Text></View>
+                  <View style={styles.infoRow}><Text style={styles.infoLabel}>보관구역:</Text><Text style={styles.infoValue}>{itemData.storageZone || '없음'}</Text></View>
                   
                   <View style={styles.divider} />
                   <Text style={styles.sectionTitle}>상세 묘사</Text>

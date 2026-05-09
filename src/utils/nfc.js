@@ -1,6 +1,22 @@
 import NfcManager, { Ndef, NfcTech } from 'react-native-nfc-manager';
 
 let started = false;
+const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
+const DEFAULT_NFC_TIMEOUT_MS = 10000;
+
+const withTimeout = (promise, timeoutMs) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(NFC_NOT_FOUND_MESSAGE));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+};
 
 export const initNfc = async () => {
   if (started) return true;
@@ -52,15 +68,22 @@ export const extractNfcLocation = (rawText = '') => {
   return text;
 };
 
-export const readNfcText = async () => {
+export const readNfcText = async ({ timeoutMs = DEFAULT_NFC_TIMEOUT_MS } = {}) => {
   await initNfc();
 
   try {
-    await NfcManager.requestTechnology(NfcTech.Ndef, {
-      alertMessage: '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
-    });
+    await withTimeout(
+      NfcManager.requestTechnology(NfcTech.Ndef, {
+        alertMessage: '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
+      }),
+      timeoutMs
+    );
 
     const tag = await NfcManager.getTag();
+    if (!tag) {
+      throw new Error(NFC_NOT_FOUND_MESSAGE);
+    }
+
     const records = tag?.ndefMessage || [];
     const textRecords = records.map(decodeNdefTextRecord).filter(Boolean);
     const text = textRecords[0] || '';

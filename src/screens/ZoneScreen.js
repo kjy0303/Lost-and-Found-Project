@@ -21,6 +21,7 @@ import { extractNfcLocation, readNfcText } from '../utils/nfc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
+const TEST_ZONES = ['A구역', 'B구역'];
 
 export default function ZoneScreen() {
   const router = useRouter();
@@ -37,6 +38,16 @@ export default function ZoneScreen() {
   const [itemData, setItemData] = useState(null);
   const [itemDocId, setItemDocId] = useState(null);
 
+  const selectZone = (zone, rawText = '') => {
+    setNfcRawText(rawText);
+    setZoneText(zone);
+    setScanned(false);
+    setSerialInput('');
+    setItemData(null);
+    setItemDocId(null);
+    setStep('item');
+  };
+
   const handleReadNfc = async () => {
     setLoading(true);
     try {
@@ -48,13 +59,7 @@ export default function ZoneScreen() {
         return;
       }
 
-      setNfcRawText(rawText);
-      setZoneText(zone);
-      setScanned(false);
-      setSerialInput('');
-      setItemData(null);
-      setItemDocId(null);
-      setStep('item');
+      selectZone(zone, rawText);
       Alert.alert('구역 확인 완료', `${zone} 태그가 확인되었습니다.\n이제 물품의 QR을 스캔하거나 일련번호를 입력해 주세요.`);
     } catch (error) {
       Alert.alert('NFC 오류', String(error?.message || error));
@@ -96,9 +101,12 @@ export default function ZoneScreen() {
       const updatePayload = {
         storageZone: zoneText,
         storageZoneUpdatedAt: new Date().toISOString(),
-        storageZoneNfcText: nfcRawText,
         updatedAt: new Date().toISOString(),
       };
+
+      if (nfcRawText) {
+        updatePayload.storageZoneNfcText = nfcRawText;
+      }
 
       await updateDoc(itemRef, updatePayload);
       setItemData({ ...data, ...updatePayload });
@@ -112,12 +120,11 @@ export default function ZoneScreen() {
 
   const confirmZoneUpdate = (documentId, data) => {
     const currentZone = data.storageZone || '';
-    const itemName = data.sub_category || data.feature || '선택한 물품';
 
     if (!currentZone) {
       Alert.alert(
         '보관구역 등록',
-        `'${itemName}' 물품을 [${zoneText}]에 등록하시겠습니까?`,
+        `이 분실물을 ${zoneText}에 등록하시겠습니까?`,
         [
           { text: '취소', style: 'cancel' },
           { text: '등록', onPress: () => updateStorageZone(documentId, data) }
@@ -127,13 +134,13 @@ export default function ZoneScreen() {
     }
 
     if (currentZone === zoneText) {
-      Alert.alert('알림', `이미 [${zoneText}]에 등록된 물품입니다.`);
+      Alert.alert('알림', `이미 ${zoneText}에 등록되어 있습니다.`);
       return;
     }
 
     Alert.alert(
       '보관구역 변경',
-      `이미 [${currentZone}]에 등록된 물품입니다.\n[${zoneText}]으로 변경하시겠습니까?`,
+      `이미 ${currentZone}에 등록된 분실물입니다. ${zoneText}으로 변경하시겠습니까?`,
       [
         { text: '취소', style: 'cancel' },
         { text: '변경', onPress: () => updateStorageZone(documentId, data) }
@@ -143,7 +150,7 @@ export default function ZoneScreen() {
 
   const fetchItemBySerial = async (serialNumber) => {
     if (!zoneText) {
-      Alert.alert('알림', '먼저 NFC 태그로 보관구역을 확인해 주세요.');
+      Alert.alert('알림', '먼저 보관구역을 선택해 주세요.');
       setStep('nfc');
       return;
     }
@@ -256,7 +263,7 @@ export default function ZoneScreen() {
         </View>
 
         <View style={styles.currentZoneBox}>
-          <Text style={styles.currentZoneLabel}>현재 확인된 보관구역</Text>
+          <Text style={styles.currentZoneLabel}>선택된 보관구역</Text>
           <Text style={styles.currentZoneValue}>{zoneText || '없음'}</Text>
         </View>
 
@@ -265,9 +272,24 @@ export default function ZoneScreen() {
             <Ionicons name="radio-outline" size={54} color="#1A237E" />
             <Text style={styles.sectionTitle}>보관구역 NFC 태그를 스캔하세요</Text>
             <Text style={styles.sectionDesc}>테스트 단계에서는 A구역, B구역처럼 태그를 나누어 사용할 수 있습니다.</Text>
-            <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc}>
+            <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc} disabled={loading}>
               <Text style={styles.primaryBtnText}>NFC 태그 읽기</Text>
             </TouchableOpacity>
+            <View style={styles.testZoneBlock}>
+              <Text style={styles.testZoneLabel}>테스트용 구역 선택</Text>
+              <View style={styles.testZoneRow}>
+                {TEST_ZONES.map((zone) => (
+                  <TouchableOpacity
+                    key={zone}
+                    style={styles.testZoneBtn}
+                    activeOpacity={0.78}
+                    onPress={() => selectZone(zone)}
+                  >
+                    <Text style={styles.testZoneBtnText}>{zone}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         )}
 
@@ -366,6 +388,11 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: '#1A237E', paddingVertical: 14, paddingHorizontal: 30, borderRadius: 10, marginTop: 16 },
   primaryBtnWide: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  testZoneBlock: { width: '100%', marginTop: 18 },
+  testZoneLabel: { fontSize: 13, fontWeight: '800', color: '#777', marginBottom: 10, textAlign: 'center' },
+  testZoneRow: { flexDirection: 'row', gap: 10 },
+  testZoneBtn: { flex: 1, backgroundColor: '#F0F4FF', borderWidth: 1, borderColor: '#DDE5FF', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  testZoneBtnText: { color: '#1A237E', fontSize: 16, fontWeight: '900' },
   zoneHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
   zoneHeaderTitle: { fontSize: 16, fontWeight: '900', color: '#1A237E' },
   changeZoneText: { fontSize: 13, fontWeight: '800', color: '#FF9800' },

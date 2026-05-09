@@ -401,7 +401,7 @@ export default function HistoryScreen() {
                       {(currentTab === '폐기/이관' || currentTab === '반환완료') && (
                         <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#2E7D32'}]} onPress={handleReRegister}>
                           <Ionicons name="refresh-circle" size={20} color="#fff" />
-                          <Text style={styles.actionBtnText}> 다시 '보관중'으로 재등록</Text>
+                          <Text style={styles.actionBtnText}> 다시 보관중으로 재등록</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -446,7 +446,7 @@ export default function HistoryScreen() {
                       
                       <View style={styles.infoRow}><Text style={styles.infoLabel}>현재 상태</Text><Text style={[styles.infoValue, {fontWeight: 'bold', color: '#D32F2F'}]}>{selectedItem.status}</Text></View>
                       <View style={styles.infoRow}><Text style={styles.infoLabel}>등록일시</Text><Text style={styles.infoValue}>{new Date(selectedItem.registeredAt).toLocaleString('ko-KR')}</Text></View>
-                      <View style={styles.infoRow}><Text style={styles.infoLabel}>분류</Text><Text style={styles.infoValue}>{selectedItem.main_category} > {selectedItem.sub_category}</Text></View>
+                      <View style={styles.infoRow}><Text style={styles.infoLabel}>분류</Text><Text style={styles.infoValue}>{selectedItem.main_category} / {selectedItem.sub_category}</Text></View>
                       <View style={styles.infoRow}><Text style={styles.infoLabel}>습득장소</Text><Text style={styles.infoValue}>{selectedItem.foundLocation}</Text></View>
                       
                       <View style={styles.divider} />
