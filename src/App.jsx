@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, orderBy, query, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, updateDoc, addDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './App.css';
@@ -16,6 +16,33 @@ const IconAlert = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 const cleanFeatureText = (item) => {
   return (item.sub_category || item.feature || "").replace(/\s*\(.*?\)\s*/g, '').split(' ').pop().trim();
 };
+
+// 웹에서 관측한 운영 데이터를 통계용 텍스트 스냅샷으로 변환
+// 사진 URL, 개인정보, 상세 이미지 등은 저장하지 않고 통계 계산에 필요한 필드만 남긴다.
+const buildStatsSnapshotFromItem = (item) => {
+  const nowIso = new Date().toISOString();
+  const status = item.status || item.lastKnownStatus || '보관중';
+
+  return {
+    originalItemId: item.id || item.originalItemId || '',
+    serialNumber: item.serialNumber || '',
+    main_category: item.main_category || '',
+    sub_category: item.sub_category || '',
+    feature: item.feature || '',
+    brand: item.brand || '',
+    color: item.color || '',
+    foundLocation: item.foundLocation || '',
+    registeredAt: item.registeredAt || nowIso,
+    status,
+    lastKnownStatus: status,
+    updatedAt: item.updatedAt || item.registeredAt || nowIso,
+    firstCapturedAt: item.firstCapturedAt || nowIso,
+    lastCapturedAt: nowIso,
+  };
+};
+
+// 삭제 후 통계 문서만 남아도 마지막 상태 기준으로 반환/이관 통계를 계산하기 위한 함수
+const getStatsStatus = (item) => item?.lastKnownStatus || item?.status || '';
 
 const getStatusClass = (status) => {
   if (status === '보관중') return 'status-storage';
@@ -66,6 +93,7 @@ const Pagination = ({ currentPage, setCurrentPage, totalItems, itemsPerPage }) =
 
 function App() {
   const [items, setItems] = useState([]);
+  const [statItems, setStatItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,6 +174,13 @@ function App() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // 개발 중 Hot Reload/HMR로 이전 렌더링 상태가 남는 것을 막기 위해
+      // Firebase를 다시 읽기 전에 화면 상태를 먼저 초기화한다.
+      setItems([]);
+      setFilteredItems([]);
+      setStatItems([]);
+      setClaims([]);
+
       try {
         const q = query(collection(db, "lostItems"), orderBy("registeredAt", "desc"));
         const snap = await getDocs(q);
@@ -165,10 +200,44 @@ function App() {
         }));
 
         setItems(data);
+
+        // 통계는 운영용 lostItems와 분리해서 lostItemStats 컬렉션에 누적 보존한다.
+        // 웹이 한 번이라도 본 항목은 이후 모바일에서 원본이 삭제되어도 통계에 남는다.
+        const statQ = query(collection(db, "lostItemStats"), orderBy("registeredAt", "desc"));
+        const statSnap = await getDocs(statQ);
+        let statsData = statSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+
+        const currentSnapshots = data.map((item) => ({
+          id: item.id,
+          ...buildStatsSnapshotFromItem(item),
+        }));
+
+        if (currentSnapshots.length > 0) {
+          await Promise.all(currentSnapshots.map(({ id, ...payload }) => 
+            setDoc(doc(db, "lostItemStats", id), payload, { merge: true })
+          ));
+
+          const statsMap = new Map(statsData.map((item) => [item.id, item]));
+          currentSnapshots.forEach((item) => {
+            const previous = statsMap.get(item.id) || {};
+            statsMap.set(item.id, { ...previous, ...item });
+          });
+
+          statsData = Array.from(statsMap.values()).sort((a, b) => 
+            new Date(b.registeredAt || 0) - new Date(a.registeredAt || 0)
+          );
+        }
+
+        setStatItems(statsData);
         setClaims([]);
 
       } catch (e) { 
-        console.error(e); 
+        console.error(e);
+        // Firebase 조회가 실패해도 이전 통계 상태가 화면에 남지 않게 비운다.
+        setItems([]);
+        setFilteredItems([]);
+        setStatItems([]);
+        setClaims([]);
       } finally { 
         setLoading(false); 
       }
@@ -362,6 +431,10 @@ function App() {
   });
   const paginatedClaims = validClaims.slice((claimPage - 1) * itemsPerPage, claimPage * itemsPerPage);
 
+  // 통계 화면은 반드시 웹이 누적 관리하는 텍스트 스냅샷(lostItemStats)만 기준으로 계산한다.
+  // Firebase/통계 컬렉션이 비어 있으면 0건으로 보여야 하므로, lostItems로 fallback하지 않는다.
+  const statsSourceItems = statItems;
+
   const getStatsFromList = (list) => {
     const byCategory = {}; 
     categories.filter(c => c !== '전체').forEach(c => byCategory[c] = 0);
@@ -394,51 +467,54 @@ function App() {
   if (timeframe === 'daily') {
     labelCurr = '오늘'; labelPrev = '어제'; chartTitle = `${thisMonth + 1}월 일별 접수 및 처리 추이`;
     chartData = Array.from({length: new Date(thisYear, thisMonth + 1, 0).getDate()}, (_, i) => ({ name: `${i+1}일`, 접수:0, 반환:0, 이관:0 }));
-    items.forEach(item => {
+    statsSourceItems.forEach(item => {
+      const statStatus = getStatsStatus(item);
       const actionDate = item.updatedAt || item.registeredAt;
       if (isTargetDay(item.registeredAt, today)) currReg++; if (isTargetDay(item.registeredAt, yesterday)) prevReg++;
-      if (item.status === '반환완료') { if (isTargetDay(actionDate, today)) currRet++; if (isTargetDay(actionDate, yesterday)) prevRet++; }
-      if (item.status === '폐기/이관') { if (isTargetDay(actionDate, today)) currDis++; if (isTargetDay(actionDate, yesterday)) prevDis++; }
+      if (statStatus === '반환완료') { if (isTargetDay(actionDate, today)) currRet++; if (isTargetDay(actionDate, yesterday)) prevRet++; }
+      if (statStatus === '폐기/이관') { if (isTargetDay(actionDate, today)) currDis++; if (isTargetDay(actionDate, yesterday)) prevDis++; }
       
       const regIdx = getSafeIndex(item.registeredAt, 'daily');
       const actIdx = getSafeIndex(actionDate, 'daily');
       
       if (isTargetMonth(item.registeredAt, thisYear, thisMonth) && chartData[regIdx]) chartData[regIdx].접수++;
-      if (item.status === '반환완료' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].반환++;
-      if (item.status === '폐기/이관' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].이관++;
+      if (statStatus === '반환완료' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].반환++;
+      if (statStatus === '폐기/이관' && isTargetMonth(actionDate, thisYear, thisMonth) && chartData[actIdx]) chartData[actIdx].이관++;
     });
   } else if (timeframe === 'monthly') {
     labelCurr = '이번 달'; labelPrev = '지난달'; chartTitle = `${thisYear}년 월별 접수 및 처리 추이`;
     chartData = Array.from({length: 12}, (_, i) => ({ name: `${i+1}월`, 접수:0, 반환:0, 이관:0 }));
-    items.forEach(item => {
+    statsSourceItems.forEach(item => {
+      const statStatus = getStatsStatus(item);
       const actionDate = item.updatedAt || item.registeredAt;
       if (isTargetMonth(item.registeredAt, thisYear, thisMonth)) currReg++; if (isTargetMonth(item.registeredAt, lastMonthYear, lastMonthIdx)) prevReg++;
-      if (item.status === '반환완료') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currRet++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevRet++; }
-      if (item.status === '폐기/이관') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currDis++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevDis++; }
+      if (statStatus === '반환완료') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currRet++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevRet++; }
+      if (statStatus === '폐기/이관') { if (isTargetMonth(actionDate, thisYear, thisMonth)) currDis++; if (isTargetMonth(actionDate, lastMonthYear, lastMonthIdx)) prevDis++; }
       
       const regIdx = getSafeIndex(item.registeredAt, 'monthly');
       const actIdx = getSafeIndex(actionDate, 'monthly');
 
       if (isTargetYear(item.registeredAt, thisYear) && chartData[regIdx]) chartData[regIdx].접수++;
-      if (item.status === '반환완료' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].반환++;
-      if (item.status === '폐기/이관' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].이관++;
+      if (statStatus === '반환완료' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].반환++;
+      if (statStatus === '폐기/이관' && isTargetYear(actionDate, thisYear) && chartData[actIdx]) chartData[actIdx].이관++;
     });
   } else {
     labelCurr = '올해'; labelPrev = '전년도'; chartTitle = `최근 5년 접수 및 처리 추이`;
     const startYear = thisYear - 4;
     chartData = Array.from({length: 5}, (_, i) => ({ name: `${startYear + i}년`, 접수:0, 반환:0, 이관:0 }));
-    items.forEach(item => {
+    statsSourceItems.forEach(item => {
+      const statStatus = getStatsStatus(item);
       const actionDate = item.updatedAt || item.registeredAt;
       if (isTargetYear(item.registeredAt, thisYear)) currReg++; if (isTargetYear(item.registeredAt, thisYear - 1)) prevReg++;
-      if (item.status === '반환완료') { if (isTargetYear(actionDate, thisYear)) currRet++; if (isTargetYear(actionDate, thisYear - 1)) prevRet++; }
-      if (item.status === '폐기/이관') { if (isTargetYear(actionDate, thisYear)) currDis++; if (isTargetYear(actionDate, thisYear - 1)) prevDis++; }
+      if (statStatus === '반환완료') { if (isTargetYear(actionDate, thisYear)) currRet++; if (isTargetYear(actionDate, thisYear - 1)) prevRet++; }
+      if (statStatus === '폐기/이관') { if (isTargetYear(actionDate, thisYear)) currDis++; if (isTargetYear(actionDate, thisYear - 1)) prevDis++; }
       
       const regIdx = getSafeIndex(item.registeredAt, 'yearly');
       const actIdx = getSafeIndex(actionDate, 'yearly');
 
       if (chartData[regIdx]) chartData[regIdx].접수++;
-      if (item.status === '반환완료' && chartData[actIdx]) chartData[actIdx].반환++;
-      if (item.status === '폐기/이관' && chartData[actIdx]) chartData[actIdx].이관++;
+      if (statStatus === '반환완료' && chartData[actIdx]) chartData[actIdx].반환++;
+      if (statStatus === '폐기/이관' && chartData[actIdx]) chartData[actIdx].이관++;
     });
   }
 
@@ -456,15 +532,15 @@ function App() {
   };
 
   let detailedFilteredItems = [];
-  if (detailedTimeframe === 'daily') detailedFilteredItems = items.filter(i => isTargetMonth(i.registeredAt, thisYear, thisMonth));
-  else if (detailedTimeframe === 'monthly') detailedFilteredItems = items.filter(i => isTargetYear(i.registeredAt, thisYear));
-  else detailedFilteredItems = items.filter(i => new Date(i.registeredAt).getFullYear() >= thisYear - 4);
+  if (detailedTimeframe === 'daily') detailedFilteredItems = statsSourceItems.filter(i => isTargetMonth(i.registeredAt, thisYear, thisMonth));
+  else if (detailedTimeframe === 'monthly') detailedFilteredItems = statsSourceItems.filter(i => isTargetYear(i.registeredAt, thisYear));
+  else detailedFilteredItems = statsSourceItems.filter(i => i.registeredAt && !isNaN(new Date(i.registeredAt).getTime()) && new Date(i.registeredAt).getFullYear() >= thisYear - 4);
 
   const catDetailedStats = {}; categories.filter(c => c !== '전체').forEach(c => catDetailedStats[c] = { total: 0, returned: 0 });
   detailedFilteredItems.forEach(item => {
     if (item.main_category && catDetailedStats[item.main_category]) {
       catDetailedStats[item.main_category].total += 1;
-      if (item.status === '반환완료') catDetailedStats[item.main_category].returned += 1;
+      if (getStatsStatus(item) === '반환완료') catDetailedStats[item.main_category].returned += 1;
     }
   });
   
@@ -479,8 +555,8 @@ function App() {
   const topLocations = Object.entries(locationCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   const simulatedDBStats = { thisMonth: { count: 0, totalLeadTimeMs: 0 }, lastMonth: { count: 0, totalLeadTimeMs: 0 } };
-  items.forEach(item => {
-    if (item.status === '반환완료' && item.registeredAt && item.updatedAt) {
+  statsSourceItems.forEach(item => {
+    if (getStatsStatus(item) === '반환완료' && item.registeredAt && item.updatedAt) {
       const msDiff = new Date(item.updatedAt).getTime() - new Date(item.registeredAt).getTime();
       if (isTargetMonth(item.updatedAt, thisYear, thisMonth)) { simulatedDBStats.thisMonth.count += 1; simulatedDBStats.thisMonth.totalLeadTimeMs += msDiff; }
       else if (isTargetMonth(item.updatedAt, lastMonthYear, lastMonthIdx)) { simulatedDBStats.lastMonth.count += 1; simulatedDBStats.lastMonth.totalLeadTimeMs += msDiff; }
