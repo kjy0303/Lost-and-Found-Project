@@ -1,4 +1,5 @@
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
+import iconv from 'iconv-lite';
 
 const PRINTER_NAME_HINTS = ['XP', 'XPRINTER', 'PRINTER', 'DT326', 'XP-DT326B'];
 const LABEL_WIDTH_DOTS = 400;
@@ -115,12 +116,12 @@ export const connectBluetoothPrinter = async (device) => {
   try {
     connectedDevice = await BluetoothClassic.connectToDevice(address, {
       connectionType: 'binary',
-      charset: 'EUC-KR'
+      charset: 'ascii'
     });
   } catch {
     connectedDevice = await BluetoothClassic.connectToDevice(address, {
       connectionType: 'binary',
-      charset: 'EUC-KR',
+      charset: 'ascii',
       secureSocket: false
     });
   }
@@ -220,7 +221,8 @@ export const printLostItemLabel = async (item) => {
 
   const BluetoothClassic = getBluetoothClassic();
   const labelCommand = buildLostItemLabelCommand(item);
-  await BluetoothClassic.writeToDevice(connectedPrinter.address, labelCommand, 'EUC-KR');
+  const encodedCommand = iconv.encode(labelCommand, 'cp949');
+  await BluetoothClassic.writeToDevice(connectedPrinter.address, encodedCommand);
 };
 
 export const printTestLabel = async () => {
