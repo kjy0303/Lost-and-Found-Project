@@ -7,8 +7,6 @@ import {
   Dimensions,
   Image,
   Modal,
-  PermissionsAndroid,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -19,75 +17,32 @@ import {
 
 import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import {
+  connectBluetoothPrinter,
+  disconnectBluetoothPrinter,
+  findBluetoothPrinters,
+  getConnectedPrinter,
+  getDeviceAddress,
+  getDeviceName,
+  isBluetoothPrinterConnected,
+  printTestLabel
+} from '../utils/bluetoothPrinter';
 
 const { width } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
 const REGISTER_ICON = require('../assets/lost-and-found-icon.png');
-const PRINTER_NAME_HINTS = ['XP', 'XPRINTER', 'PRINTER', 'DT326', 'XP-DT326B'];
-
-const getDeviceAddress = (device) => device?.address || device?.id || '';
-const getDeviceName = (device) => device?.name || '이름 없는 기기';
-
-const isLikelyPrinter = (device) => {
-  const name = getDeviceName(device).toUpperCase();
-  return PRINTER_NAME_HINTS.some((hint) => name.includes(hint));
-};
-
-const mergeBluetoothDevices = (...deviceLists) => {
-  const deviceMap = new Map();
-
-  deviceLists.flat().filter(Boolean).forEach((device) => {
-    const address = getDeviceAddress(device);
-    if (!address) return;
-
-    deviceMap.set(address, {
-      ...device,
-      address,
-      id: device.id || address,
-      name: getDeviceName(device),
-      isLikelyPrinter: isLikelyPrinter(device)
-    });
-  });
-
-  return Array.from(deviceMap.values()).sort((a, b) => {
-    if (a.isLikelyPrinter !== b.isLikelyPrinter) return a.isLikelyPrinter ? -1 : 1;
-    return getDeviceName(a).localeCompare(getDeviceName(b));
-  });
-};
-
-const getBluetoothClassic = () => {
-  const bluetoothModule = require('react-native-bluetooth-classic');
-  return bluetoothModule.default || bluetoothModule;
-};
-
-const buildFakeSerial = () => {
-  const now = new Date();
-  const datePart = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${datePart}-TEST-${randomPart}`;
-};
-
-const buildTsplTestLabel = (serialNumber) => [
-  'SIZE 50 mm,30 mm',
-  'GAP 2 mm,0 mm',
-  'DIRECTION 1',
-  'CLS',
-  'TEXT 30,25,"3",0,1,1,"LOST ITEM TEST"',
-  `TEXT 30,70,"2",0,1,1,"S/N: ${serialNumber}"`,
-  `QRCODE 30,115,L,5,A,0,"${serialNumber}"`,
-  'PRINT 1,1',
-  ''
-].join('\r\n');
 
 export default function MainScreen() {
   const router = useRouter();
 
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrinterModalVisible, setIsPrinterModalVisible] = useState(false);
   const [printerDevices, setPrinterDevices] = useState([]);
   const [isScanningPrinters, setIsScanningPrinters] = useState(false);
   const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
-  const [connectedPrinter, setConnectedPrinter] = useState(null);
+  const [isDisconnectingPrinter, setIsDisconnectingPrinter] = useState(false);
+  const [connectedPrinter, setConnectedPrinter] = useState(getConnectedPrinter());
   const [printerStatus, setPrinterStatus] = useState('프린터 미연결');
 
   const menuItems = [
@@ -96,6 +51,26 @@ export default function MainScreen() {
     { id: 'Return', title: '확인 및 반환', icon: 'qr-code', color: '#1A237E', route: '/return' },
     { id: 'History', title: '기록 관리', icon: 'time', color: '#1A237E', route: '/history' },
   ];
+
+  const handleOpenMenu = () => {
+    const currentPrinter = getConnectedPrinter();
+    setConnectedPrinter(currentPrinter);
+    setPrinterStatus(currentPrinter ? `${currentPrinter.name} 연결 확인 중...` : '프린터 미연결');
+    setIsMenuVisible(true);
+
+    if (currentPrinter?.address) {
+      isBluetoothPrinterConnected()
+        .then((isConnected) => {
+          const latestPrinter = getConnectedPrinter();
+          setConnectedPrinter(latestPrinter);
+          setPrinterStatus(isConnected && latestPrinter ? `${latestPrinter.name} 연결됨` : '프린터 미연결');
+        })
+        .catch(() => {
+          setConnectedPrinter(null);
+          setPrinterStatus('프린터 상태 확인 실패');
+        });
+    }
+  };
 
   const handleDeleteAllData = async () => {
     Alert.alert(
@@ -130,75 +105,14 @@ export default function MainScreen() {
     );
   };
 
-  const requestBluetoothPermissions = async () => {
-    if (Platform.OS !== 'android') {
-      Alert.alert('지원 안내', '블루투스 프린터 연결 테스트는 Android APK에서 지원됩니다.');
-      return false;
-    }
-
-    const permissions = [];
-    const androidVersion = Number(Platform.Version);
-
-    if (androidVersion >= 31) {
-      permissions.push(
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
-      );
-    } else {
-      permissions.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-    }
-
-    const validPermissions = permissions.filter(Boolean);
-    const granted = await PermissionsAndroid.requestMultiple(validPermissions);
-    const deniedPermission = validPermissions.find(
-      (permission) => granted[permission] !== PermissionsAndroid.RESULTS.GRANTED
-    );
-
-    if (deniedPermission) {
-      Alert.alert('권한 필요', '프린터 검색과 연결을 위해 블루투스 및 위치 권한을 허용해 주세요.');
-      return false;
-    }
-
-    return true;
-  };
-
   const handleFindPrinters = async () => {
     if (isScanningPrinters) return;
-
-    const hasPermissions = await requestBluetoothPermissions();
-    if (!hasPermissions) return;
 
     setIsScanningPrinters(true);
     setPrinterStatus('프린터 검색 중...');
 
     try {
-      const BluetoothClassic = getBluetoothClassic();
-      const isAvailable = await BluetoothClassic.isBluetoothAvailable();
-      if (!isAvailable) {
-        Alert.alert('블루투스 미지원', '이 기기에서는 블루투스를 사용할 수 없습니다.');
-        setPrinterStatus('블루투스 사용 불가');
-        return;
-      }
-
-      const isEnabled = await BluetoothClassic.isBluetoothEnabled();
-      if (!isEnabled) {
-        const enabled = await BluetoothClassic.requestBluetoothEnabled();
-        if (!enabled) {
-          setPrinterStatus('블루투스 꺼짐');
-          return;
-        }
-      }
-
-      const bondedDevices = await BluetoothClassic.getBondedDevices();
-      let discoveredDevices = [];
-
-      try {
-        discoveredDevices = await BluetoothClassic.startDiscovery();
-      } finally {
-        BluetoothClassic.cancelDiscovery().catch(() => {});
-      }
-
-      const mergedDevices = mergeBluetoothDevices(bondedDevices, discoveredDevices);
+      const mergedDevices = await findBluetoothPrinters();
       setPrinterDevices(mergedDevices);
       setPrinterStatus(
         mergedDevices.length > 0
@@ -218,41 +132,19 @@ export default function MainScreen() {
     const address = getDeviceAddress(device);
     if (!address || isConnectingPrinter) return;
 
-    const hasPermissions = await requestBluetoothPermissions();
-    if (!hasPermissions) return;
-
     setIsConnectingPrinter(true);
     setPrinterStatus(`${getDeviceName(device)} 연결 중...`);
 
     try {
-      const BluetoothClassic = getBluetoothClassic();
-      await BluetoothClassic.cancelDiscovery().catch(() => {});
-
-      let connectedDevice;
-      try {
-        connectedDevice = await BluetoothClassic.connectToDevice(address, {
-          connectionType: 'binary',
-          charset: 'ascii'
-        });
-      } catch {
-        connectedDevice = await BluetoothClassic.connectToDevice(address, {
-          connectionType: 'binary',
-          charset: 'ascii',
-          secureSocket: false
-        });
+      const nextPrinter = await connectBluetoothPrinter(device);
+      if (!nextPrinter) {
+        setPrinterStatus('프린터 미연결');
+        return;
       }
 
-      const isConnected = await BluetoothClassic.isDeviceConnected(address);
-      if (!isConnected) {
-        throw new Error('프린터 연결 상태를 확인하지 못했습니다.');
-      }
-
-      setConnectedPrinter({
-        address,
-        id: connectedDevice?.id || device.id || address,
-        name: getDeviceName(connectedDevice || device)
-      });
-      setPrinterStatus(`${getDeviceName(connectedDevice || device)} 연결됨`);
+      setConnectedPrinter(nextPrinter);
+      setPrinterStatus(`${nextPrinter.name} 연결됨`);
+      setIsPrinterModalVisible(false);
     } catch (error) {
       console.error('블루투스 연결 오류:', error);
       setConnectedPrinter(null);
@@ -260,6 +152,28 @@ export default function MainScreen() {
       Alert.alert('연결 실패', '프린터 전원이 켜져 있고 휴대폰과 페어링되어 있는지 확인해 주세요.');
     } finally {
       setIsConnectingPrinter(false);
+    }
+  };
+
+  const handleDisconnectPrinter = async () => {
+    if (!connectedPrinter?.address || isDisconnectingPrinter) {
+      setPrinterStatus('프린터 미연결');
+      return;
+    }
+
+    setIsDisconnectingPrinter(true);
+    setPrinterStatus('프린터 연결 해제 중...');
+
+    try {
+      await disconnectBluetoothPrinter();
+      setConnectedPrinter(null);
+      setPrinterStatus('프린터 미연결');
+    } catch (error) {
+      console.error('블루투스 연결 해제 오류:', error);
+      Alert.alert('연결 해제 실패', '프린터 연결을 끊는 중 문제가 발생했습니다.');
+      setPrinterStatus(`${connectedPrinter.name} 연결됨`);
+    } finally {
+      setIsDisconnectingPrinter(false);
     }
   };
 
@@ -272,31 +186,23 @@ export default function MainScreen() {
     setPrinterStatus('테스트 라벨 출력 중...');
 
     try {
-      const BluetoothClassic = getBluetoothClassic();
-      const isConnected = await BluetoothClassic.isDeviceConnected(connectedPrinter.address);
-      if (!isConnected) {
-        setConnectedPrinter(null);
-        setPrinterStatus('프린터 연결 끊김');
-        Alert.alert('연결 끊김', '프린터 연결이 끊겼습니다. 다시 연결해 주세요.');
-        return;
-      }
-
-      const fakeSerial = buildFakeSerial();
-      const labelCommand = buildTsplTestLabel(fakeSerial);
-      await BluetoothClassic.writeToDevice(connectedPrinter.address, labelCommand, 'ascii');
+      const fakeSerial = await printTestLabel();
       setPrinterStatus(`테스트 출력 완료: ${fakeSerial}`);
       Alert.alert('출력 전송 완료', `가짜 일련번호 ${fakeSerial} 라벨 출력을 전송했습니다.`);
     } catch (error) {
       console.error('테스트 출력 오류:', error);
       setPrinterStatus('테스트 출력 실패');
-      Alert.alert('출력 실패', '프린터 출력 전송에 실패했습니다. 연결 상태와 프린터 용지를 확인해 주세요.');
+      if (String(error?.message || '').includes('연결되어 있지')) {
+        setConnectedPrinter(null);
+      }
+      Alert.alert('출력 실패', String(error?.message || '프린터 출력 전송에 실패했습니다.'));
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.menuButton} onPress={() => setIsMenuVisible(true)}>
+        <TouchableOpacity style={styles.menuButton} onPress={handleOpenMenu}>
           <Ionicons name="menu" size={36} color="#1A237E" />
         </TouchableOpacity>
 
@@ -356,82 +262,54 @@ export default function MainScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.bluetoothPanel}>
-                <View style={styles.bluetoothPanelHeader}>
-                  <View style={styles.bluetoothTitleRow}>
-                    <Ionicons name="bluetooth" size={22} color="#1A237E" />
-                    <Text style={styles.bluetoothPanelTitle}>블루투스 프린터</Text>
+              <View style={styles.statusCard}>
+                <Text style={styles.statusLabel}>블루투스 연결 상태</Text>
+                <View style={styles.statusRow}>
+                  <Ionicons
+                    name={connectedPrinter ? 'checkmark-circle' : 'alert-circle-outline'}
+                    size={22}
+                    color={connectedPrinter ? '#2E7D32' : '#777'}
+                  />
+                  <View style={styles.statusTextBox}>
+                    <Text style={[styles.statusTitle, connectedPrinter && styles.statusTitleConnected]}>
+                      {connectedPrinter ? '프린터 연결됨' : '프린터 미연결'}
+                    </Text>
+                    <Text style={styles.statusSubText}>
+                      {connectedPrinter ? `${connectedPrinter.name} (${connectedPrinter.address})` : printerStatus}
+                    </Text>
                   </View>
-                  <Text style={[styles.printerStatusText, connectedPrinter && styles.printerStatusConnected]}>
-                    {printerStatus}
-                  </Text>
                 </View>
-
-                {connectedPrinter && (
-                  <View style={styles.connectedPrinterBox}>
-                    <Ionicons name="checkmark-circle" size={20} color="#2E7D32" />
-                    <View style={styles.connectedPrinterTextBox}>
-                      <Text style={styles.connectedPrinterName}>{connectedPrinter.name}</Text>
-                      <Text style={styles.connectedPrinterAddress}>{connectedPrinter.address}</Text>
-                    </View>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.bluetoothButton}
-                  onPress={handleFindPrinters}
-                  disabled={isScanningPrinters}
-                >
-                  {isScanningPrinters ? (
-                    <ActivityIndicator size="small" color="#1A237E" />
-                  ) : (
-                    <Ionicons name="search" size={20} color="#1A237E" />
-                  )}
-                  <Text style={styles.bluetoothButtonText}>
-                    {isScanningPrinters ? '프린터 찾는 중...' : '프린터 찾기'}
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.printerList}>
-                  {printerDevices.length === 0 ? (
-                    <Text style={styles.emptyPrinterText}>프린터 찾기를 눌러 주변 기기와 등록된 기기를 불러오세요.</Text>
-                  ) : (
-                    printerDevices.map((device) => {
-                      const address = getDeviceAddress(device);
-                      const isSelected = connectedPrinter?.address === address;
-
-                      return (
-                        <TouchableOpacity
-                          key={address}
-                          style={[styles.printerDeviceItem, isSelected && styles.printerDeviceSelected]}
-                          onPress={() => handleConnectPrinter(device)}
-                          disabled={isConnectingPrinter}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.printerDeviceName}>{getDeviceName(device)}</Text>
-                            <Text style={styles.printerDeviceAddress}>{address}</Text>
-                            {device.isLikelyPrinter && <Text style={styles.printerHint}>프린터 후보</Text>}
-                          </View>
-                          {isConnectingPrinter && !isSelected ? (
-                            <ActivityIndicator size="small" color="#1A237E" />
-                          ) : (
-                            <Ionicons name={isSelected ? 'checkmark-circle' : 'link-outline'} size={22} color={isSelected ? '#2E7D32' : '#1A237E'} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.testPrintButton, !connectedPrinter && styles.testPrintButtonDisabled]}
-                  onPress={handlePrintTestLabel}
-                  disabled={!connectedPrinter}
-                >
-                  <Ionicons name="qr-code-outline" size={20} color="#fff" />
-                  <Text style={styles.testPrintButtonText}>가짜 일련번호/QR 테스트 인쇄</Text>
-                </TouchableOpacity>
               </View>
+
+              <TouchableOpacity style={styles.settingsActionButton} onPress={() => setIsPrinterModalVisible(true)}>
+                <Ionicons name="bluetooth" size={22} color="#1A237E" />
+                <Text style={styles.settingsActionText}>블루투스 연결</Text>
+                <Ionicons name="chevron-forward" size={20} color="#1A237E" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.settingsActionButton, !connectedPrinter && styles.settingsActionButtonDisabled]}
+                onPress={handleDisconnectPrinter}
+                disabled={!connectedPrinter || isDisconnectingPrinter}
+              >
+                {isDisconnectingPrinter ? (
+                  <ActivityIndicator size="small" color="#1A237E" />
+                ) : (
+                  <Ionicons name="unlink-outline" size={22} color={connectedPrinter ? '#1A237E' : '#9AA0B8'} />
+                )}
+                <Text style={[styles.settingsActionText, !connectedPrinter && styles.settingsActionTextDisabled]}>
+                  블루투스 연결끊기
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.testPrintButton, !connectedPrinter && styles.testPrintButtonDisabled]}
+                onPress={handlePrintTestLabel}
+                disabled={!connectedPrinter}
+              >
+                <Ionicons name="qr-code-outline" size={20} color="#fff" />
+                <Text style={styles.testPrintButtonText}>QR 테스트 인쇄</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAllData} disabled={isDeleting}>
                 {isDeleting ? (
@@ -446,6 +324,67 @@ export default function MainScreen() {
             </ScrollView>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={isPrinterModalVisible} transparent={true} animationType="fade">
+        <View style={styles.printerModalOverlay}>
+          <View style={styles.printerModalBox}>
+            <View style={styles.printerModalHeader}>
+              <Text style={styles.printerModalTitle}>블루투스 프린터 연결</Text>
+              <TouchableOpacity onPress={() => setIsPrinterModalVisible(false)}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.bluetoothButton}
+              onPress={handleFindPrinters}
+              disabled={isScanningPrinters}
+            >
+              {isScanningPrinters ? (
+                <ActivityIndicator size="small" color="#1A237E" />
+              ) : (
+                <Ionicons name="search" size={20} color="#1A237E" />
+              )}
+              <Text style={styles.bluetoothButtonText}>
+                {isScanningPrinters ? '프린터 찾는 중...' : '프린터 찾기'}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.printerModalStatus}>{printerStatus}</Text>
+
+            <ScrollView style={styles.printerModalList} showsVerticalScrollIndicator={false}>
+              {printerDevices.length === 0 ? (
+                <Text style={styles.emptyPrinterText}>프린터 찾기를 눌러 등록된 기기와 주변 기기를 불러오세요.</Text>
+              ) : (
+                printerDevices.map((device) => {
+                  const address = getDeviceAddress(device);
+                  const isSelected = connectedPrinter?.address === address;
+
+                  return (
+                    <TouchableOpacity
+                      key={address}
+                      style={[styles.printerDeviceItem, isSelected && styles.printerDeviceSelected]}
+                      onPress={() => handleConnectPrinter(device)}
+                      disabled={isConnectingPrinter}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.printerDeviceName}>{getDeviceName(device)}</Text>
+                        <Text style={styles.printerDeviceAddress}>{address}</Text>
+                        {device.isLikelyPrinter && <Text style={styles.printerHint}>프린터 후보</Text>}
+                      </View>
+                      {isConnectingPrinter && !isSelected ? (
+                        <ActivityIndicator size="small" color="#1A237E" />
+                      ) : (
+                        <Ionicons name={isSelected ? 'checkmark-circle' : 'link-outline'} size={22} color={isSelected ? '#2E7D32' : '#1A237E'} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -539,26 +478,32 @@ const styles = StyleSheet.create({
   sideMenu: { width: '75%', height: '100%', backgroundColor: '#fff', padding: 24, paddingTop: 60, shadowColor: '#000', shadowOffset: { width: 2, height: 0 }, shadowOpacity: 0.2, elevation: 5 },
   sideMenuHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
   sideMenuTitle: { fontSize: 20, fontWeight: '800', color: '#1A237E' },
-  bluetoothPanel: { backgroundColor: '#F7F8FF', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
-  bluetoothPanelHeader: { marginBottom: 12 },
-  bluetoothTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  bluetoothPanelTitle: { color: '#1A237E', fontSize: 17, fontWeight: '900' },
-  printerStatusText: { color: '#666', fontSize: 12, fontWeight: '700' },
-  printerStatusConnected: { color: '#2E7D32' },
-  connectedPrinterBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, padding: 10, marginBottom: 12, gap: 8 },
-  connectedPrinterTextBox: { flex: 1 },
-  connectedPrinterName: { color: '#2E7D32', fontSize: 14, fontWeight: '900' },
-  connectedPrinterAddress: { color: '#4F6F52', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  statusCard: { backgroundColor: '#F7F8FF', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
+  statusLabel: { color: '#5D6480', fontSize: 12, fontWeight: '800', marginBottom: 10 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusTextBox: { flex: 1 },
+  statusTitle: { color: '#333', fontSize: 16, fontWeight: '900' },
+  statusTitleConnected: { color: '#2E7D32' },
+  statusSubText: { color: '#777', fontSize: 11, fontWeight: '700', marginTop: 3, lineHeight: 16 },
+  settingsActionButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F4FF', padding: 16, borderRadius: 12, gap: 10, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
+  settingsActionButtonDisabled: { backgroundColor: '#F5F5F7', borderColor: '#E5E7F0' },
+  settingsActionText: { flex: 1, color: '#1A237E', fontSize: 16, fontWeight: '800' },
+  settingsActionTextDisabled: { color: '#9AA0B8' },
+  printerModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 22 },
+  printerModalBox: { width: '100%', maxHeight: '78%', backgroundColor: '#fff', borderRadius: 20, padding: 18 },
+  printerModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#eee', marginBottom: 14 },
+  printerModalTitle: { color: '#1A237E', fontSize: 18, fontWeight: '900' },
+  printerModalStatus: { color: '#666', fontSize: 12, fontWeight: '700', marginBottom: 10, textAlign: 'center' },
+  printerModalList: { maxHeight: 360 },
   bluetoothButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', padding: 14, borderRadius: 12, gap: 8, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
   bluetoothButtonText: { color: '#1A237E', fontSize: 16, fontWeight: '800' },
-  printerList: { gap: 8, marginBottom: 12 },
   emptyPrinterText: { color: '#777', fontSize: 12, lineHeight: 18, textAlign: 'center', paddingVertical: 10 },
-  printerDeviceItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E8EAF6', gap: 8 },
+  printerDeviceItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E8EAF6', gap: 8, marginBottom: 8 },
   printerDeviceSelected: { borderColor: '#2E7D32', backgroundColor: '#F1F8E9' },
   printerDeviceName: { color: '#333', fontSize: 14, fontWeight: '900' },
   printerDeviceAddress: { color: '#777', fontSize: 11, fontWeight: '700', marginTop: 3 },
   printerHint: { color: '#1A237E', fontSize: 11, fontWeight: '800', marginTop: 4 },
-  testPrintButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A237E', padding: 14, borderRadius: 12, gap: 8 },
+  testPrintButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A237E', padding: 14, borderRadius: 12, gap: 8, marginBottom: 12 },
   testPrintButtonDisabled: { backgroundColor: '#B0B4C8' },
   testPrintButtonText: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center' },
   dangerButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE', padding: 16, borderRadius: 12, gap: 10 },

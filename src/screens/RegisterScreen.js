@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Dimensions, Modal, SafeAreaView, ScrollView, 
 import { addDoc, collection } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { db } from '../../firebaseConfig';
+import { printLostItemLabel } from '../utils/bluetoothPrinter';
 
 const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const VISION_KEY = process.env.EXPO_PUBLIC_VISION_API_KEY;
@@ -17,6 +18,8 @@ const MAIN_CATEGORIES = [
   '악기', '유가증권', '의류', '자동차용품', '전자기기', '지갑', '컴퓨터', 
   '카메라', '현금', '휴대폰', '증명서', '기타물품'
 ];
+
+const LOCATION_OPTIONS = ['KTX', '새마을호', '무궁화호', '역내'];
 
 // 🌟 개인정보 자동 마스킹 함수 4종 (엄격한 변환 규칙)
 const maskName = (name) => {
@@ -373,12 +376,19 @@ export default function RegisterScreen() {
     );
   };
 
-  const handleFinalSubmit = async () => {
-    if (!locationText.trim()) {
-      Alert.alert("알림", "등록 장소를 입력해 주세요.");
-      return;
-    }
-    
+  const askLabelPrintAndSubmit = (selectedLocation) => {
+    setLocationText(selectedLocation);
+    Alert.alert(
+      "라벨지 출력",
+      "라벨지를 출력하겠습니까?",
+      [
+        { text: "아니오", style: "cancel", onPress: () => handleFinalSubmit(selectedLocation, false) },
+        { text: "예", onPress: () => handleFinalSubmit(selectedLocation, true) }
+      ]
+    );
+  };
+
+  const handleFinalSubmit = async (selectedLocation, shouldPrintLabel) => {
     setViewState('loading');
     let uploadedImageUrl = "";
 
@@ -409,7 +419,7 @@ export default function RegisterScreen() {
         serialNumber: newSerialNumber,
         ...aiData,
         specialNote: specialNote,
-        foundLocation: locationText,
+        foundLocation: selectedLocation,
         registeredAt: new Date().toISOString(),
         status: '보관중',
         pi_name: maskName(piName),
@@ -419,8 +429,20 @@ export default function RegisterScreen() {
         imageUrl: uploadedImageUrl 
       };
       
-      const docRef = await addDoc(collection(db, "lostItems"), finalData);
-      Alert.alert("등록 완료", "안전하게 데이터베이스에 저장되었습니다.", [
+      await addDoc(collection(db, "lostItems"), finalData);
+
+      let resultMessage = "안전하게 데이터베이스에 저장되었습니다.";
+      if (shouldPrintLabel) {
+        try {
+          await printLostItemLabel(finalData);
+          resultMessage = "안전하게 데이터베이스에 저장되었고, 라벨지 출력 명령을 전송했습니다.";
+        } catch (printError) {
+          const message = String(printError?.message || "프린터가 연결되어 있지 않습니다.");
+          resultMessage = `${message}\n데이터만 등록되었습니다.`;
+        }
+      }
+
+      Alert.alert("등록 완료", resultMessage, [
         { text: "확인", onPress: () => router.push('/') }
       ]);
     } catch (error) {
@@ -575,24 +597,34 @@ export default function RegisterScreen() {
 
       {viewState === 'locationInput' && (
         <View style={styles.locationContainer}>
-          <Text style={styles.locationTitle}>습득 장소를 입력해 주세요</Text>
-          <Text style={styles.locationSub}>현재 시간과 사진이 자동으로 등록됩니다.</Text>
-          
-          <TextInput
-            style={styles.locationInput}
-            placeholder="예: 열차번호 1024호 3번칸"
-            placeholderTextColor="#888"
-            value={locationText}
-            onChangeText={setLocationText}
-            autoFocus={true}
-          />
+          <Text style={styles.locationTitle}>분실물을 잃어버린 장소를 선택해 주세요</Text>
+          <Text style={styles.locationSub}>장소 선택 후 데이터 등록과 라벨지 출력 여부를 확인합니다.</Text>
+
+          <View style={styles.locationOptionGrid}>
+            {LOCATION_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.locationOptionButton,
+                  locationText === option && styles.locationOptionButtonSelected
+                ]}
+                onPress={() => askLabelPrintAndSubmit(option)}
+              >
+                <Text
+                  style={[
+                    styles.locationOptionText,
+                    locationText === option && styles.locationOptionTextSelected
+                  ]}
+                >
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <View style={styles.actionButtons}>
             <TouchableOpacity style={styles.secondaryBtn} onPress={() => setViewState('result')}>
               <Text style={styles.secondaryBtnText}>뒤로</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleFinalSubmit}>
-              <Text style={styles.primaryBtnText}>최종 DB 전송</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -670,6 +702,11 @@ const styles = StyleSheet.create({
   locationContainer: { padding: 24, flex: 1, justifyContent: 'center' },
   locationTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A237E', marginBottom: 8, textAlign: 'center' },
   locationSub: { fontSize: 14, color: '#666', marginBottom: 30, textAlign: 'center' },
+  locationOptionGrid: { gap: 12, marginBottom: 40 },
+  locationOptionButton: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 18, borderWidth: 1, borderColor: '#DDE5FF', alignItems: 'center' },
+  locationOptionButtonSelected: { backgroundColor: '#1A237E', borderColor: '#1A237E' },
+  locationOptionText: { color: '#1A237E', fontSize: 17, fontWeight: '800' },
+  locationOptionTextSelected: { color: '#fff' },
   locationInput: { backgroundColor: '#fff', borderRadius: 12, padding: 18, fontSize: 16, borderWidth: 1, borderColor: '#1A237E', marginBottom: 40, color: '#333' },
   permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   permissionText: { fontSize: 16, marginBottom: 20 },

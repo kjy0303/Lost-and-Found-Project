@@ -8,6 +8,7 @@ import {
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../firebaseConfig';
+import { printLostItemLabel } from '../utils/bluetoothPrinter';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -129,8 +130,13 @@ export default function HistoryScreen() {
       `일련번호: ${selectedItem.serialNumber}\n블루투스 프린터로 라벨을 전송하시겠습니까?`,
       [
         { text: "취소", style: "cancel" },
-        { text: "인쇄하기", onPress: () => {
-          Alert.alert("인쇄 신호 전송 완료", "프린터에서 라벨이 출력됩니다.");
+        { text: "인쇄하기", onPress: async () => {
+          try {
+            await printLostItemLabel(selectedItem);
+            Alert.alert("인쇄 전송 완료", "라벨지 출력 명령을 전송했습니다.");
+          } catch (error) {
+            Alert.alert("프린터 안내", String(error?.message || "프린터가 연결되어 있지 않습니다."));
+          }
         }}
       ]
     );
