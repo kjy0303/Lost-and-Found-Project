@@ -6,7 +6,9 @@ import {
   Alert,
   Dimensions,
   Image,
+  Linking,
   Modal,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -60,6 +62,30 @@ export default function MainScreen() {
               Alert.alert('오류', '데이터 삭제에 실패했습니다.');
             } finally {
               setIsDeleting(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleOpenBluetoothSettings = () => {
+    Alert.alert(
+      '블루투스 프린터 연결',
+      '휴대폰의 블루투스 설정에서 Xprinter XP-DT326B를 검색한 뒤 페어링해 주세요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '블루투스 설정 열기',
+          onPress: async () => {
+            try {
+              if (Platform.OS === 'android') {
+                await Linking.sendIntent('android.settings.BLUETOOTH_SETTINGS');
+              } else {
+                await Linking.openSettings();
+              }
+            } catch {
+              Alert.alert('오류', '블루투스 설정을 열 수 없습니다.');
             }
           }
         }
@@ -128,6 +154,15 @@ export default function MainScreen() {
                 <Ionicons name="close" size={28} color="#333" />
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={styles.bluetoothButton} onPress={handleOpenBluetoothSettings}>
+              <Ionicons name="bluetooth" size={22} color="#1A237E" />
+              <View style={styles.bluetoothTextBox}>
+                <Text style={styles.bluetoothButtonText}>블루투스 프린터 연결</Text>
+                <Text style={styles.bluetoothButtonSubText}>XP-DT326B 검색 및 페어링</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#1A237E" />
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAllData} disabled={isDeleting}>
               {isDeleting ? (
@@ -234,6 +269,10 @@ const styles = StyleSheet.create({
   sideMenu: { width: '75%', height: '100%', backgroundColor: '#fff', padding: 24, paddingTop: 60, shadowColor: '#000', shadowOffset: { width: 2, height: 0 }, shadowOpacity: 0.2, elevation: 5 },
   sideMenuHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
   sideMenuTitle: { fontSize: 20, fontWeight: '800', color: '#1A237E' },
+  bluetoothButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F4FF', padding: 16, borderRadius: 12, gap: 10, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
+  bluetoothTextBox: { flex: 1 },
+  bluetoothButtonText: { color: '#1A237E', fontSize: 16, fontWeight: '800' },
+  bluetoothButtonSubText: { color: '#5D6480', fontSize: 12, fontWeight: '600', marginTop: 3 },
   dangerButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE', padding: 16, borderRadius: 12, gap: 10 },
   dangerButtonText: { color: '#D32F2F', fontSize: 16, fontWeight: '700' }
 });
