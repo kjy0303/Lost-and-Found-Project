@@ -115,12 +115,12 @@ export const connectBluetoothPrinter = async (device) => {
   try {
     connectedDevice = await BluetoothClassic.connectToDevice(address, {
       connectionType: 'binary',
-      charset: 'utf-8'
+      charset: 'EUC-KR'
     });
   } catch {
     connectedDevice = await BluetoothClassic.connectToDevice(address, {
       connectionType: 'binary',
-      charset: 'utf-8',
+      charset: 'EUC-KR',
       secureSocket: false
     });
   }
@@ -173,6 +173,14 @@ const getCenteredTextX = (text, dotsPerChar) => {
   return Math.max(0, Math.round((LABEL_WIDTH_DOTS - estimatedWidth) / 2));
 };
 
+const getCenteredKoreanTextX = (text) => {
+  const estimatedWidth = Array.from(String(text || '')).reduce((width, char) => {
+    return width + (char.charCodeAt(0) > 127 ? 24 : 12);
+  }, 0);
+
+  return Math.max(0, Math.round((LABEL_WIDTH_DOTS - estimatedWidth) / 2));
+};
+
 const buildFakeSerial = () => {
   const now = new Date();
   const datePart = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -183,16 +191,16 @@ const buildFakeSerial = () => {
 export const buildLostItemLabelCommand = (item) => {
   const subCategory = sanitizeLabelText(item?.sub_category || item?.feature || '분실물');
   const serialNumber = sanitizeLabelText(item?.serialNumber || item?.serial || 'NO-SERIAL');
-  const titleX = getCenteredTextX(subCategory, 18);
+  const titleX = getCenteredKoreanTextX(subCategory);
   const serialX = getCenteredTextX(serialNumber, 11);
 
   return [
     'SIZE 50 mm,30 mm',
     'GAP 2 mm,0 mm',
     'DIRECTION 1',
-    'CODEPAGE UTF-8',
+    'CODEPAGE 949',
     'CLS',
-    `TEXT ${titleX},12,"3",0,1,1,"${subCategory}"`,
+    `TEXT ${titleX},12,"K",0,1,1,"${subCategory}"`,
     `QRCODE 136,58,L,6,A,0,"${serialNumber}"`,
     `TEXT ${serialX},190,"2",0,1,1,"${serialNumber}"`,
     'PRINT 1,1',
@@ -212,7 +220,7 @@ export const printLostItemLabel = async (item) => {
 
   const BluetoothClassic = getBluetoothClassic();
   const labelCommand = buildLostItemLabelCommand(item);
-  await BluetoothClassic.writeToDevice(connectedPrinter.address, labelCommand, 'utf-8');
+  await BluetoothClassic.writeToDevice(connectedPrinter.address, labelCommand, 'EUC-KR');
 };
 
 export const printTestLabel = async () => {
