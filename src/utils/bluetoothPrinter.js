@@ -192,9 +192,9 @@ export const buildLostItemLabelCommand = (item) => {
     'DIRECTION 1',
     'CODEPAGE UTF-8',
     'CLS',
-    `TEXT ${titleX},22,"3",0,1,1,"${subCategory}"`,
-    `QRCODE 136,70,L,6,A,0,"${serialNumber}"`,
-    `TEXT ${serialX},215,"2",0,1,1,"${serialNumber}"`,
+    `TEXT ${titleX},12,"3",0,1,1,"${subCategory}"`,
+    `QRCODE 136,58,L,6,A,0,"${serialNumber}"`,
+    `TEXT ${serialX},190,"2",0,1,1,"${serialNumber}"`,
     'PRINT 1,1',
     ''
   ].join('\r\n');
