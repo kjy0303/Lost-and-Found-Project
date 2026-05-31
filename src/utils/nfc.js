@@ -31,6 +31,25 @@ export const initNfc = async () => {
   return true;
 };
 
+export const ensureNfcReady = async () => {
+  await initNfc();
+
+  try {
+    const enabled = await NfcManager.isEnabled();
+    if (!enabled) {
+      throw new Error('NFC가 꺼져 있습니다. 기기 설정에서 NFC를 켜주세요.');
+    }
+  } catch (error) {
+    if (String(error?.message || '').includes('NFC가 꺼져')) {
+      throw error;
+    }
+
+    throw new Error('NFC 상태를 확인하지 못했습니다. 권한 또는 기기 설정을 확인해주세요.');
+  }
+
+  return true;
+};
+
 const decodeNdefTextRecord = (record) => {
   try {
     if (record?.type && Array.isArray(record.type)) {
@@ -44,8 +63,50 @@ const decodeNdefTextRecord = (record) => {
     const languageCodeLength = payload[0] & 0x3f;
     const textBytes = payload.slice(1 + languageCodeLength);
     return Ndef.util.bytesToString(textBytes);
-  } catch (error) {
+  } catch (_error) {
     return '';
+  }
+};
+
+const normalizeTagIdValue = (value) => {
+  if (!value) return '';
+
+  if (Array.isArray(value)) {
+    return value
+      .map((byte) => Number(byte).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+  }
+
+  const text = String(value).trim();
+  if (!text) return '';
+
+  const hexOnly = text.replace(/[^0-9a-f]/gi, '');
+  return (hexOnly || text).toUpperCase();
+};
+
+export const extractNfcTagId = (tag = {}) => {
+  const candidates = [
+    tag.id,
+    tag.tagID,
+    tag.uid,
+    tag.identifier,
+    tag.serialNumber,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeTagIdValue(candidate);
+    if (normalized) return normalized;
+  }
+
+  return '';
+};
+
+export const cancelNfcRequest = async () => {
+  try {
+    await NfcManager.cancelTechnologyRequest();
+  } catch (_error) {
+    // 이미 취소되었거나 요청이 없는 경우는 다음 스캔을 막지 않도록 무시합니다.
   }
 };
 
@@ -68,13 +129,16 @@ export const extractNfcLocation = (rawText = '') => {
   return text;
 };
 
-export const readNfcText = async ({ timeoutMs = DEFAULT_NFC_TIMEOUT_MS } = {}) => {
-  await initNfc();
+export const readNfcTag = async ({
+  timeoutMs = DEFAULT_NFC_TIMEOUT_MS,
+  alertMessage = '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
+} = {}) => {
+  await ensureNfcReady();
 
   try {
     await withTimeout(
-      NfcManager.requestTechnology(NfcTech.Ndef, {
-        alertMessage: '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
+      NfcManager.requestTechnology([NfcTech.Ndef, NfcTech.NfcA], {
+        alertMessage,
       }),
       timeoutMs
     );
@@ -84,16 +148,27 @@ export const readNfcText = async ({ timeoutMs = DEFAULT_NFC_TIMEOUT_MS } = {}) =
       throw new Error(NFC_NOT_FOUND_MESSAGE);
     }
 
+    const tagId = extractNfcTagId(tag);
+    if (!tagId) {
+      throw new Error('NFC 태그 ID를 읽지 못했습니다.');
+    }
+
     const records = tag?.ndefMessage || [];
     const textRecords = records.map(decodeNdefTextRecord).filter(Boolean);
     const text = textRecords[0] || '';
 
-    if (!text) {
-      throw new Error('NFC 태그에서 구역 정보를 읽지 못했습니다.');
-    }
-
-    return text;
+    return { tag, tagId, text };
   } finally {
-    NfcManager.cancelTechnologyRequest().catch(() => {});
+    await cancelNfcRequest();
   }
+};
+
+export const readNfcText = async ({ timeoutMs = DEFAULT_NFC_TIMEOUT_MS } = {}) => {
+  const { text } = await readNfcTag({ timeoutMs });
+
+  if (!text) {
+    throw new Error('NFC 태그에서 구역 정보를 읽지 못했습니다.');
+  }
+
+  return text;
 };
