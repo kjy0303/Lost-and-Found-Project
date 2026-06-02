@@ -15,7 +15,7 @@ import {
   View
 } from 'react-native';
 
-import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import {
   connectBluetoothPrinter,
@@ -27,10 +27,12 @@ import {
   isBluetoothPrinterConnected,
   printTestLabel
 } from '../utils/bluetoothPrinter';
+import { readNfcTag } from '../utils/nfc';
 
 const { width } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
 const REGISTER_ICON = require('../assets/lost-and-found-icon.png');
+const ZONE_OPTIONS = ['A구역', 'B구역', 'C구역', '이관대기'];
 
 export default function MainScreen() {
   const router = useRouter();
@@ -42,6 +44,11 @@ export default function MainScreen() {
   const [isScanningPrinters, setIsScanningPrinters] = useState(false);
   const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
   const [isDisconnectingPrinter, setIsDisconnectingPrinter] = useState(false);
+  const [isNfcZoneModalVisible, setIsNfcZoneModalVisible] = useState(false);
+  const [isReadingNfcZone, setIsReadingNfcZone] = useState(false);
+  const [isSavingNfcZone, setIsSavingNfcZone] = useState(false);
+  const [nfcZoneTagId, setNfcZoneTagId] = useState('');
+  const [nfcZoneStatus, setNfcZoneStatus] = useState('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
   const [connectedPrinter, setConnectedPrinter] = useState(getConnectedPrinter());
   const [printerStatus, setPrinterStatus] = useState('프린터 미연결');
 
@@ -177,6 +184,84 @@ export default function MainScreen() {
     }
   };
 
+  const openNfcZoneModal = () => {
+    setNfcZoneTagId('');
+    setNfcZoneStatus('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
+    setIsNfcZoneModalVisible(true);
+  };
+
+  const closeNfcZoneModal = () => {
+    if (isReadingNfcZone || isSavingNfcZone) return;
+
+    setIsNfcZoneModalVisible(false);
+    setNfcZoneTagId('');
+    setNfcZoneStatus('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
+  };
+
+  const handleReadNfcZoneTag = async () => {
+    if (isReadingNfcZone) return;
+
+    setIsReadingNfcZone(true);
+    setNfcZoneStatus('NFC 태그를 휴대폰에 가까이 대주세요.');
+
+    try {
+      const { tagId } = await readNfcTag({
+        alertMessage: '등록할 보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
+      });
+      const zoneRef = doc(db, 'storageZones', tagId);
+      const zoneSnap = await getDoc(zoneRef);
+      const savedZoneName = zoneSnap.exists() ? zoneSnap.data()?.zoneName || '' : '';
+
+      setNfcZoneTagId(tagId);
+      setNfcZoneStatus(
+        savedZoneName
+          ? `현재 등록된 구역: ${savedZoneName}\n다른 구역을 선택하면 변경됩니다.`
+          : '등록되지 않은 태그입니다. 등록할 구역을 선택해주세요.'
+      );
+    } catch (error) {
+      setNfcZoneStatus('태그를 읽지 못했습니다. 다시 시도해주세요.');
+      Alert.alert('NFC 오류', String(error?.message || error));
+    } finally {
+      setIsReadingNfcZone(false);
+    }
+  };
+
+  const handleSaveNfcZoneTag = async (zoneName) => {
+    if (!nfcZoneTagId) {
+      Alert.alert('알림', '먼저 NFC 태그를 읽어주세요.');
+      return;
+    }
+
+    if (isSavingNfcZone) return;
+
+    setIsSavingNfcZone(true);
+    setNfcZoneStatus(`${zoneName}으로 저장 중...`);
+
+    try {
+      const zoneRef = doc(db, 'storageZones', nfcZoneTagId);
+      const zoneSnap = await getDoc(zoneRef);
+      const payload = {
+        tagId: nfcZoneTagId,
+        zoneName,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (!zoneSnap.exists()) {
+        payload.createdAt = serverTimestamp();
+      }
+
+      await setDoc(zoneRef, payload, { merge: true });
+      setNfcZoneStatus(`${zoneName} 태그로 등록되었습니다.`);
+      Alert.alert('등록 완료', `${zoneName} 태그로 저장되었습니다.`);
+    } catch (error) {
+      console.error('NFC 구역 태그 저장 오류:', error);
+      setNfcZoneStatus('태그 저장 중 문제가 발생했습니다.');
+      Alert.alert('저장 실패', 'NFC 보관구역 태그 저장 중 문제가 발생했습니다.');
+    } finally {
+      setIsSavingNfcZone(false);
+    }
+  };
+
   const handlePrintTestLabel = async () => {
     if (!connectedPrinter?.address) {
       Alert.alert('프린터 미연결', '먼저 프린터를 선택해서 연결해 주세요.');
@@ -302,6 +387,12 @@ export default function MainScreen() {
                 </Text>
               </TouchableOpacity>
 
+              <TouchableOpacity style={styles.settingsActionButton} onPress={openNfcZoneModal}>
+                <Ionicons name="radio-outline" size={22} color="#1A237E" />
+                <Text style={styles.settingsActionText}>NFC 구역 태그 등록</Text>
+                <Ionicons name="chevron-forward" size={20} color="#1A237E" />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.testPrintButton, !connectedPrinter && styles.testPrintButtonDisabled]}
                 onPress={handlePrintTestLabel}
@@ -383,6 +474,57 @@ export default function MainScreen() {
                 })
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={isNfcZoneModalVisible} transparent={true} animationType="fade">
+        <View style={styles.printerModalOverlay}>
+          <View style={styles.nfcZoneModalBox}>
+            <View style={styles.printerModalHeader}>
+              <Text style={styles.printerModalTitle}>NFC 구역 태그 등록</Text>
+              <TouchableOpacity onPress={closeNfcZoneModal} disabled={isReadingNfcZone || isSavingNfcZone}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.bluetoothButton}
+              onPress={handleReadNfcZoneTag}
+              disabled={isReadingNfcZone || isSavingNfcZone}
+            >
+              {isReadingNfcZone ? (
+                <ActivityIndicator size="small" color="#1A237E" />
+              ) : (
+                <Ionicons name="radio-outline" size={20} color="#1A237E" />
+              )}
+              <Text style={styles.bluetoothButtonText}>
+                {isReadingNfcZone ? '태그 읽는 중...' : 'NFC 태그 읽기'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.nfcStatusBox}>
+              <Text style={styles.nfcStatusLabel}>태그 상태</Text>
+              <Text style={styles.nfcStatusText}>{nfcZoneStatus}</Text>
+              {nfcZoneTagId ? (
+                <Text style={styles.nfcTagIdText} numberOfLines={1} ellipsizeMode="middle">
+                  {nfcZoneTagId}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.nfcZoneOptionGrid}>
+              {ZONE_OPTIONS.map((zone) => (
+                <TouchableOpacity
+                  key={zone}
+                  style={[styles.nfcZoneOptionButton, !nfcZoneTagId && styles.nfcZoneOptionButtonDisabled]}
+                  onPress={() => handleSaveNfcZoneTag(zone)}
+                  disabled={!nfcZoneTagId || isReadingNfcZone || isSavingNfcZone}
+                >
+                  <Text style={styles.nfcZoneOptionText}>{zone}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
       </Modal>
@@ -497,6 +639,15 @@ const styles = StyleSheet.create({
   printerModalList: { maxHeight: 360 },
   bluetoothButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', padding: 14, borderRadius: 12, gap: 8, marginBottom: 12, borderWidth: 1, borderColor: '#DDE5FF' },
   bluetoothButtonText: { color: '#1A237E', fontSize: 16, fontWeight: '800' },
+  nfcZoneModalBox: { width: '100%', maxWidth: 390, backgroundColor: '#fff', borderRadius: 20, padding: 18 },
+  nfcStatusBox: { backgroundColor: '#F7F8FF', borderRadius: 14, borderWidth: 1, borderColor: '#DDE5FF', padding: 14, marginBottom: 12 },
+  nfcStatusLabel: { color: '#5D6480', fontSize: 12, fontWeight: '800', marginBottom: 6 },
+  nfcStatusText: { color: '#333', fontSize: 14, fontWeight: '800', lineHeight: 20 },
+  nfcTagIdText: { color: '#1A237E', fontSize: 12, fontWeight: '900', marginTop: 8 },
+  nfcZoneOptionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  nfcZoneOptionButton: { flexGrow: 1, flexBasis: '45%', alignItems: 'center', backgroundColor: '#1A237E', borderRadius: 12, paddingVertical: 13 },
+  nfcZoneOptionButtonDisabled: { backgroundColor: '#B0B4C8' },
+  nfcZoneOptionText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   emptyPrinterText: { color: '#777', fontSize: 12, lineHeight: 18, textAlign: 'center', paddingVertical: 10 },
   printerDeviceItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E8EAF6', gap: 8, marginBottom: 8 },
   printerDeviceSelected: { borderColor: '#2E7D32', backgroundColor: '#F1F8E9' },

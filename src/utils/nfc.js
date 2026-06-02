@@ -3,6 +3,9 @@ import NfcManager, { Ndef, NfcTech } from 'react-native-nfc-manager';
 let started = false;
 const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
 const DEFAULT_NFC_TIMEOUT_MS = 10000;
+const NFC_SESSION_SETTLE_MS = 200;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const withTimeout = (promise, timeoutMs) => {
   let timeoutId;
@@ -134,6 +137,8 @@ export const readNfcTag = async ({
   alertMessage = '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
 } = {}) => {
   await ensureNfcReady();
+  await cancelNfcRequest();
+  await wait(NFC_SESSION_SETTLE_MS);
 
   try {
     await withTimeout(
@@ -160,6 +165,7 @@ export const readNfcTag = async ({
     return { tag, tagId, text };
   } finally {
     await cancelNfcRequest();
+    await wait(NFC_SESSION_SETTLE_MS);
   }
 };
 

@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   Image,
-  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -22,7 +21,6 @@ import { extractNfcLocation, readNfcTag } from '../utils/nfc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
-const ZONE_OPTIONS = ['A구역', 'B구역', 'C구역', '이관대기'];
 
 export default function ZoneScreen() {
   const router = useRouter();
@@ -37,19 +35,12 @@ export default function ZoneScreen() {
   const [zoneText, setZoneText] = useState('');
   const [nfcRawText, setNfcRawText] = useState('');
   const [selectedTagId, setSelectedTagId] = useState('');
-  const [scannedTagId, setScannedTagId] = useState('');
-  const [zoneNameInput, setZoneNameInput] = useState('');
-  const [zoneRegisterModalVisible, setZoneRegisterModalVisible] = useState(false);
   const [itemData, setItemData] = useState(null);
   const [itemDocId, setItemDocId] = useState(null);
 
   const selectZone = (zone, rawText = '', tagId = '') => {
     setNfcRawText(rawText);
     setSelectedTagId(tagId);
-    if (!tagId) {
-      setScannedTagId('');
-      setZoneNameInput('');
-    }
     setZoneText(zone);
     setScanned(false);
     setSerialInput('');
@@ -66,7 +57,6 @@ export default function ZoneScreen() {
       const zoneRef = doc(db, 'storageZones', tagId);
       const zoneSnap = await getDoc(zoneRef);
 
-      setScannedTagId(tagId);
       setSelectedTagId(tagId);
       setNfcRawText(text || '');
 
@@ -75,7 +65,6 @@ export default function ZoneScreen() {
         : '';
 
       if (savedZoneName) {
-        setZoneNameInput(savedZoneName);
         Alert.alert(
           '구역 확인 완료',
           `${savedZoneName} 태그가 확인되었습니다.\n물품 연결을 진행하시겠습니까?`,
@@ -87,49 +76,12 @@ export default function ZoneScreen() {
         return;
       }
 
-      setZoneNameInput(ZONE_OPTIONS.includes(rawZoneText) ? rawZoneText : '');
       setZoneText('');
-      setZoneRegisterModalVisible(true);
+      setSelectedTagId('');
+      setNfcRawText('');
+      Alert.alert('미등록된 태그입니다.', '태그를 옵션에서 등록해주세요.');
     } catch (error) {
       Alert.alert('NFC 오류', String(error?.message || error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveZoneTagMapping = async (selectedZoneName = zoneNameInput) => {
-    const zoneName = String(selectedZoneName || '').trim();
-
-    if (!scannedTagId) {
-      Alert.alert('알림', '먼저 NFC 태그를 스캔해주세요.');
-      return;
-    }
-
-    if (!zoneName) {
-      Alert.alert('알림', '보관구역을 선택해주세요.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const zoneRef = doc(db, 'storageZones', scannedTagId);
-      const zoneSnap = await getDoc(zoneRef);
-      const payload = {
-        tagId: scannedTagId,
-        zoneName,
-        updatedAt: serverTimestamp(),
-      };
-
-      if (!zoneSnap.exists()) {
-        payload.createdAt = serverTimestamp();
-      }
-
-      await setDoc(zoneRef, payload, { merge: true });
-      setZoneRegisterModalVisible(false);
-      selectZone(zoneName, nfcRawText, scannedTagId);
-      Alert.alert('보관구역 태그 등록 완료', `${zoneName} 태그로 저장되었습니다.\n이제 물품을 연결해주세요.`);
-    } catch (_error) {
-      Alert.alert('오류', '보관구역 태그 저장 중 문제가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -158,20 +110,8 @@ export default function ZoneScreen() {
     setZoneText('');
     setNfcRawText('');
     setSelectedTagId('');
-    setScannedTagId('');
-    setZoneNameInput('');
-    setZoneRegisterModalVisible(false);
     setItemData(null);
     setItemDocId(null);
-  };
-
-  const closeZoneRegisterModal = () => {
-    setZoneRegisterModalVisible(false);
-    setScannedTagId('');
-    setSelectedTagId('');
-    setNfcRawText('');
-    setZoneNameInput('');
-    setZoneText('');
   };
 
   const updateStorageZone = async (documentId, data) => {
@@ -422,36 +362,6 @@ export default function ZoneScreen() {
         )}
       </ScrollView>
 
-      <Modal
-        transparent
-        visible={zoneRegisterModalVisible}
-        animationType="fade"
-        onRequestClose={closeZoneRegisterModal}
-      >
-        <View style={styles.popupBackdrop}>
-          <View style={styles.zonePopup}>
-            <Text style={styles.zonePopupTitle}>등록되지 않은 보관구역 태그입니다.</Text>
-            <Text style={styles.zonePopupDesc}>이 태그에 등록할 보관구역을 선택해주세요.</Text>
-            <View style={styles.zonePopupOptions}>
-              {ZONE_OPTIONS.map((zone) => (
-                <TouchableOpacity
-                  key={zone}
-                  style={styles.zonePopupOption}
-                  activeOpacity={0.78}
-                  disabled={loading}
-                  onPress={() => saveZoneTagMapping(zone)}
-                >
-                  <Text style={styles.zonePopupOptionText}>{zone}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.zonePopupCancelBtn} onPress={closeZoneRegisterModal} disabled={loading}>
-              <Text style={styles.zonePopupCancelText}>취소</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#1A237E" />
@@ -488,15 +398,6 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: '#1A237E', paddingVertical: 14, paddingHorizontal: 30, borderRadius: 10, marginTop: 16 },
   primaryBtnWide: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  popupBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  zonePopup: { width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 8 },
-  zonePopupTitle: { fontSize: 18, fontWeight: '900', color: '#1A237E', textAlign: 'center', marginBottom: 8 },
-  zonePopupDesc: { fontSize: 14, fontWeight: '600', color: '#666', textAlign: 'center', lineHeight: 21, marginBottom: 16 },
-  zonePopupOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  zonePopupOption: { flexGrow: 1, flexBasis: '45%', backgroundColor: '#1A237E', borderRadius: 13, paddingVertical: 13, alignItems: 'center' },
-  zonePopupOptionText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  zonePopupCancelBtn: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F3F8' },
-  zonePopupCancelText: { color: '#555', fontSize: 15, fontWeight: '800' },
   zoneHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
   zoneHeaderTitle: { fontSize: 16, fontWeight: '900', color: '#1A237E' },
   changeZoneText: { fontSize: 13, fontWeight: '800', color: '#FF9800' },
