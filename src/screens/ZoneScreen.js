@@ -21,7 +21,7 @@ import { extractNfcLocation, readNfcTag } from '../utils/nfc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
-const ZONE_OPTIONS = ['A구역', 'B구역', 'C구역', '임시보관', '이관대기'];
+const ZONE_OPTIONS = ['A구역', 'B구역', 'C구역', '이관대기'];
 
 export default function ZoneScreen() {
   const router = useRouter();
@@ -99,7 +99,7 @@ export default function ZoneScreen() {
     }
 
     if (!zoneName) {
-      Alert.alert('알림', '보관구역명을 선택하거나 입력해주세요.');
+      Alert.alert('알림', '보관구역을 선택해주세요.');
       return;
     }
 
@@ -347,24 +347,25 @@ export default function ZoneScreen() {
 
         {step === 'nfc' && (
           <View style={styles.cardBox}>
-            <Ionicons name="radio-outline" size={54} color="#1A237E" />
-            <Text style={styles.sectionTitle}>보관구역 NFC 태그를 스캔하세요</Text>
-            <Text style={styles.sectionDesc}>등록된 NFC 태그를 스캔하면 보관구역을 확인하고 물품을 연결합니다.</Text>
-            <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc} disabled={loading}>
-              <Text style={styles.primaryBtnText}>NFC 태그 읽기</Text>
-            </TouchableOpacity>
-
             {scannedTagId ? (
-              <View style={styles.tagRegisterBox}>
-                <Text style={styles.tagInfoLabel}>스캔된 태그 ID</Text>
-                <Text style={styles.tagInfoValue}>{scannedTagId}</Text>
+              <View style={styles.nfcResultPanel}>
+                <View style={styles.nfcResultHeader}>
+                  <View style={styles.nfcTagTextGroup}>
+                    <Text style={styles.tagInfoLabel}>스캔된 태그 ID</Text>
+                    <Text style={styles.tagInfoValue} numberOfLines={1} ellipsizeMode="middle">{scannedTagId}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.rescanTagBtn} onPress={handleReadNfc} disabled={loading}>
+                    <Text style={styles.rescanTagText}>다시 읽기</Text>
+                  </TouchableOpacity>
+                </View>
+
                 {registeredZoneName ? (
                   <Text style={styles.tagStatusText}>현재 등록된 구역: {registeredZoneName}</Text>
                 ) : (
                   <Text style={styles.tagStatusText}>등록되지 않은 태그입니다.</Text>
                 )}
 
-                <Text style={styles.zoneSelectLabel}>보관구역 선택</Text>
+                <Text style={styles.zoneSelectLabel}>보관구역 설정</Text>
                 <View style={styles.zoneOptionWrap}>
                   {ZONE_OPTIONS.map((zone) => (
                     <TouchableOpacity
@@ -386,14 +387,6 @@ export default function ZoneScreen() {
                   ))}
                 </View>
 
-                <TextInput
-                  style={styles.zoneNameInput}
-                  placeholder="보관구역명 직접 입력"
-                  placeholderTextColor="#999"
-                  value={zoneNameInput}
-                  onChangeText={setZoneNameInput}
-                />
-
                 <TouchableOpacity style={styles.saveTagBtn} onPress={saveZoneTagMapping} disabled={loading}>
                   <Text style={styles.saveTagBtnText}>이 태그를 보관구역으로 등록</Text>
                 </TouchableOpacity>
@@ -404,7 +397,16 @@ export default function ZoneScreen() {
                   </TouchableOpacity>
                 ) : null}
               </View>
-            ) : null}
+            ) : (
+              <>
+                <Ionicons name="radio-outline" size={48} color="#1A237E" />
+                <Text style={styles.sectionTitle}>보관구역 NFC 태그를 스캔하세요</Text>
+                <Text style={styles.sectionDesc}>등록된 NFC 태그를 스캔하면 보관구역을 확인하고 물품을 연결합니다.</Text>
+                <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc} disabled={loading}>
+                  <Text style={styles.primaryBtnText}>NFC 태그 읽기</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
 
@@ -496,7 +498,7 @@ const styles = StyleSheet.create({
   currentZoneBox: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E6EAF5' },
   currentZoneLabel: { fontSize: 13, color: '#777', fontWeight: '700', marginBottom: 6 },
   currentZoneValue: { fontSize: 22, color: '#1A237E', fontWeight: '900' },
-  cardBox: { backgroundColor: '#fff', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#1A237E', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+  cardBox: { backgroundColor: '#fff', borderRadius: 24, padding: 18, alignItems: 'center', shadowColor: '#1A237E', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   cardBoxNoPadding: { backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', shadowColor: '#1A237E', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   sectionTitle: { fontSize: 20, fontWeight: '900', color: '#1A237E', marginTop: 12, marginBottom: 8, textAlign: 'center' },
   sectionDesc: { fontSize: 14, color: '#666', lineHeight: 21, textAlign: 'center', marginBottom: 22 },
@@ -504,19 +506,23 @@ const styles = StyleSheet.create({
   primaryBtnWide: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   zoneSelectLabel: { fontSize: 13, fontWeight: '800', color: '#777', marginBottom: 10, textAlign: 'center' },
-  tagRegisterBox: { width: '100%', marginTop: 18, backgroundColor: '#F7F8FF', borderRadius: 18, padding: 14, borderWidth: 1, borderColor: '#DDE5FF' },
+  nfcResultPanel: { width: '100%' },
+  nfcResultHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7F8FF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#DDE5FF', marginBottom: 10 },
+  nfcTagTextGroup: { flex: 1, minWidth: 0, marginRight: 10 },
+  rescanTagBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#FF9800', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  rescanTagText: { color: '#FF9800', fontSize: 13, fontWeight: '900' },
   tagInfoLabel: { fontSize: 12, fontWeight: '800', color: '#777', marginBottom: 4 },
-  tagInfoValue: { fontSize: 13, fontWeight: '900', color: '#1A237E', marginBottom: 8 },
-  tagStatusText: { fontSize: 13, fontWeight: '700', color: '#555', marginBottom: 12 },
+  tagInfoValue: { fontSize: 13, fontWeight: '900', color: '#1A237E' },
+  tagStatusText: { fontSize: 13, fontWeight: '700', color: '#555', marginBottom: 10, textAlign: 'center' },
   zoneOptionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  zoneOptionBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDE5FF', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12 },
+  zoneOptionBtn: { flexGrow: 1, flexBasis: '45%', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDE5FF', paddingVertical: 11, paddingHorizontal: 12, borderRadius: 12 },
   zoneOptionBtnActive: { backgroundColor: '#1A237E', borderColor: '#1A237E' },
   zoneOptionText: { color: '#1A237E', fontSize: 13, fontWeight: '800' },
   zoneOptionTextActive: { color: '#fff' },
   zoneNameInput: { width: '100%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDE5FF', borderRadius: 12, padding: 13, color: '#333', fontSize: 15, fontWeight: '700', marginBottom: 10 },
-  saveTagBtn: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 14, borderRadius: 13, alignItems: 'center', marginBottom: 8 },
+  saveTagBtn: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 12, borderRadius: 13, alignItems: 'center', marginBottom: 8 },
   saveTagBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  linkItemBtn: { width: '100%', backgroundColor: '#2E7D32', paddingVertical: 14, borderRadius: 13, alignItems: 'center' },
+  linkItemBtn: { width: '100%', backgroundColor: '#2E7D32', paddingVertical: 12, borderRadius: 13, alignItems: 'center' },
   linkItemBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   zoneHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
   zoneHeaderTitle: { fontSize: 16, fontWeight: '900', color: '#1A237E' },
