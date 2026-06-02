@@ -8,6 +8,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -37,8 +38,8 @@ export default function ZoneScreen() {
   const [nfcRawText, setNfcRawText] = useState('');
   const [selectedTagId, setSelectedTagId] = useState('');
   const [scannedTagId, setScannedTagId] = useState('');
-  const [registeredZoneName, setRegisteredZoneName] = useState('');
   const [zoneNameInput, setZoneNameInput] = useState('');
+  const [zoneRegisterModalVisible, setZoneRegisterModalVisible] = useState(false);
   const [itemData, setItemData] = useState(null);
   const [itemDocId, setItemDocId] = useState(null);
 
@@ -47,7 +48,6 @@ export default function ZoneScreen() {
     setSelectedTagId(tagId);
     if (!tagId) {
       setScannedTagId('');
-      setRegisteredZoneName('');
       setZoneNameInput('');
     }
     setZoneText(zone);
@@ -70,19 +70,26 @@ export default function ZoneScreen() {
       setSelectedTagId(tagId);
       setNfcRawText(text || '');
 
-      if (zoneSnap.exists()) {
-        const savedZoneName = zoneSnap.data()?.zoneName || rawZoneText || '';
-        setRegisteredZoneName(savedZoneName);
+      const savedZoneName = zoneSnap.exists()
+        ? zoneSnap.data()?.zoneName || rawZoneText || ''
+        : '';
+
+      if (savedZoneName) {
         setZoneNameInput(savedZoneName);
-        setZoneText(savedZoneName);
-        Alert.alert('구역 확인 완료', `${savedZoneName} 태그가 확인되었습니다.\n물품 연결을 진행할 수 있습니다.`);
+        Alert.alert(
+          '구역 확인 완료',
+          `${savedZoneName} 태그가 확인되었습니다.\n물품 연결을 진행하시겠습니까?`,
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '물품 연결', onPress: () => selectZone(savedZoneName, text || '', tagId) },
+          ]
+        );
         return;
       }
 
-      setRegisteredZoneName('');
-      setZoneNameInput(rawZoneText);
+      setZoneNameInput(ZONE_OPTIONS.includes(rawZoneText) ? rawZoneText : '');
       setZoneText('');
-      Alert.alert('등록되지 않은 보관구역 태그입니다.', '먼저 구역을 등록해주세요.');
+      setZoneRegisterModalVisible(true);
     } catch (error) {
       Alert.alert('NFC 오류', String(error?.message || error));
     } finally {
@@ -90,8 +97,8 @@ export default function ZoneScreen() {
     }
   };
 
-  const saveZoneTagMapping = async () => {
-    const zoneName = zoneNameInput.trim();
+  const saveZoneTagMapping = async (selectedZoneName = zoneNameInput) => {
+    const zoneName = String(selectedZoneName || '').trim();
 
     if (!scannedTagId) {
       Alert.alert('알림', '먼저 NFC 태그를 스캔해주세요.');
@@ -118,7 +125,7 @@ export default function ZoneScreen() {
       }
 
       await setDoc(zoneRef, payload, { merge: true });
-      setRegisteredZoneName(zoneName);
+      setZoneRegisterModalVisible(false);
       selectZone(zoneName, nfcRawText, scannedTagId);
       Alert.alert('보관구역 태그 등록 완료', `${zoneName} 태그로 저장되었습니다.\n이제 물품을 연결해주세요.`);
     } catch (_error) {
@@ -126,15 +133,6 @@ export default function ZoneScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const proceedWithScannedZone = () => {
-    if (!zoneText) {
-      Alert.alert('알림', '먼저 등록된 보관구역 태그를 스캔하거나 구역을 저장해주세요.');
-      return;
-    }
-
-    selectZone(zoneText, nfcRawText, selectedTagId || scannedTagId);
   };
 
   const handleSerialChange = (text) => {
@@ -161,10 +159,19 @@ export default function ZoneScreen() {
     setNfcRawText('');
     setSelectedTagId('');
     setScannedTagId('');
-    setRegisteredZoneName('');
     setZoneNameInput('');
+    setZoneRegisterModalVisible(false);
     setItemData(null);
     setItemDocId(null);
+  };
+
+  const closeZoneRegisterModal = () => {
+    setZoneRegisterModalVisible(false);
+    setScannedTagId('');
+    setSelectedTagId('');
+    setNfcRawText('');
+    setZoneNameInput('');
+    setZoneText('');
   };
 
   const updateStorageZone = async (documentId, data) => {
@@ -347,66 +354,12 @@ export default function ZoneScreen() {
 
         {step === 'nfc' && (
           <View style={styles.cardBox}>
-            {scannedTagId ? (
-              <View style={styles.nfcResultPanel}>
-                <View style={styles.nfcResultHeader}>
-                  <View style={styles.nfcTagTextGroup}>
-                    <Text style={styles.tagInfoLabel}>스캔된 태그 ID</Text>
-                    <Text style={styles.tagInfoValue} numberOfLines={1} ellipsizeMode="middle">{scannedTagId}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.rescanTagBtn} onPress={handleReadNfc} disabled={loading}>
-                    <Text style={styles.rescanTagText}>다시 읽기</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {registeredZoneName ? (
-                  <Text style={styles.tagStatusText}>현재 등록된 구역: {registeredZoneName}</Text>
-                ) : (
-                  <Text style={styles.tagStatusText}>등록되지 않은 태그입니다.</Text>
-                )}
-
-                <Text style={styles.zoneSelectLabel}>보관구역 설정</Text>
-                <View style={styles.zoneOptionWrap}>
-                  {ZONE_OPTIONS.map((zone) => (
-                    <TouchableOpacity
-                      key={zone}
-                      style={[
-                        styles.zoneOptionBtn,
-                        zoneNameInput === zone && styles.zoneOptionBtnActive
-                      ]}
-                      activeOpacity={0.78}
-                      onPress={() => setZoneNameInput(zone)}
-                    >
-                      <Text style={[
-                        styles.zoneOptionText,
-                        zoneNameInput === zone && styles.zoneOptionTextActive
-                      ]}>
-                        {zone}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TouchableOpacity style={styles.saveTagBtn} onPress={saveZoneTagMapping} disabled={loading}>
-                  <Text style={styles.saveTagBtnText}>이 태그를 보관구역으로 등록</Text>
-                </TouchableOpacity>
-
-                {zoneText ? (
-                  <TouchableOpacity style={styles.linkItemBtn} onPress={proceedWithScannedZone} disabled={loading}>
-                    <Text style={styles.linkItemBtnText}>선택한 분실물에 보관구역 등록</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : (
-              <>
-                <Ionicons name="radio-outline" size={48} color="#1A237E" />
-                <Text style={styles.sectionTitle}>보관구역 NFC 태그를 스캔하세요</Text>
-                <Text style={styles.sectionDesc}>등록된 NFC 태그를 스캔하면 보관구역을 확인하고 물품을 연결합니다.</Text>
-                <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc} disabled={loading}>
-                  <Text style={styles.primaryBtnText}>NFC 태그 읽기</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <Ionicons name="radio-outline" size={48} color="#1A237E" />
+            <Text style={styles.sectionTitle}>보관구역 NFC 태그를 스캔하세요</Text>
+            <Text style={styles.sectionDesc}>등록된 NFC 태그를 스캔하면 보관구역을 확인하고 물품을 연결합니다.</Text>
+            <TouchableOpacity style={styles.primaryBtnWide} onPress={handleReadNfc} disabled={loading}>
+              <Text style={styles.primaryBtnText}>NFC 태그 읽기</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -469,6 +422,36 @@ export default function ZoneScreen() {
         )}
       </ScrollView>
 
+      <Modal
+        transparent
+        visible={zoneRegisterModalVisible}
+        animationType="fade"
+        onRequestClose={closeZoneRegisterModal}
+      >
+        <View style={styles.popupBackdrop}>
+          <View style={styles.zonePopup}>
+            <Text style={styles.zonePopupTitle}>등록되지 않은 보관구역 태그입니다.</Text>
+            <Text style={styles.zonePopupDesc}>이 태그에 등록할 보관구역을 선택해주세요.</Text>
+            <View style={styles.zonePopupOptions}>
+              {ZONE_OPTIONS.map((zone) => (
+                <TouchableOpacity
+                  key={zone}
+                  style={styles.zonePopupOption}
+                  activeOpacity={0.78}
+                  disabled={loading}
+                  onPress={() => saveZoneTagMapping(zone)}
+                >
+                  <Text style={styles.zonePopupOptionText}>{zone}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.zonePopupCancelBtn} onPress={closeZoneRegisterModal} disabled={loading}>
+              <Text style={styles.zonePopupCancelText}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#1A237E" />
@@ -505,25 +488,15 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: '#1A237E', paddingVertical: 14, paddingHorizontal: 30, borderRadius: 10, marginTop: 16 },
   primaryBtnWide: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  zoneSelectLabel: { fontSize: 13, fontWeight: '800', color: '#777', marginBottom: 10, textAlign: 'center' },
-  nfcResultPanel: { width: '100%' },
-  nfcResultHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7F8FF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#DDE5FF', marginBottom: 10 },
-  nfcTagTextGroup: { flex: 1, minWidth: 0, marginRight: 10 },
-  rescanTagBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#FF9800', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  rescanTagText: { color: '#FF9800', fontSize: 13, fontWeight: '900' },
-  tagInfoLabel: { fontSize: 12, fontWeight: '800', color: '#777', marginBottom: 4 },
-  tagInfoValue: { fontSize: 13, fontWeight: '900', color: '#1A237E' },
-  tagStatusText: { fontSize: 13, fontWeight: '700', color: '#555', marginBottom: 10, textAlign: 'center' },
-  zoneOptionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  zoneOptionBtn: { flexGrow: 1, flexBasis: '45%', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDE5FF', paddingVertical: 11, paddingHorizontal: 12, borderRadius: 12 },
-  zoneOptionBtnActive: { backgroundColor: '#1A237E', borderColor: '#1A237E' },
-  zoneOptionText: { color: '#1A237E', fontSize: 13, fontWeight: '800' },
-  zoneOptionTextActive: { color: '#fff' },
-  zoneNameInput: { width: '100%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDE5FF', borderRadius: 12, padding: 13, color: '#333', fontSize: 15, fontWeight: '700', marginBottom: 10 },
-  saveTagBtn: { width: '100%', backgroundColor: '#1A237E', paddingVertical: 12, borderRadius: 13, alignItems: 'center', marginBottom: 8 },
-  saveTagBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  linkItemBtn: { width: '100%', backgroundColor: '#2E7D32', paddingVertical: 12, borderRadius: 13, alignItems: 'center' },
-  linkItemBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  popupBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  zonePopup: { width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 8 },
+  zonePopupTitle: { fontSize: 18, fontWeight: '900', color: '#1A237E', textAlign: 'center', marginBottom: 8 },
+  zonePopupDesc: { fontSize: 14, fontWeight: '600', color: '#666', textAlign: 'center', lineHeight: 21, marginBottom: 16 },
+  zonePopupOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  zonePopupOption: { flexGrow: 1, flexBasis: '45%', backgroundColor: '#1A237E', borderRadius: 13, paddingVertical: 13, alignItems: 'center' },
+  zonePopupOptionText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  zonePopupCancelBtn: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F3F8' },
+  zonePopupCancelText: { color: '#555', fontSize: 15, fontWeight: '800' },
   zoneHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
   zoneHeaderTitle: { fontSize: 16, fontWeight: '900', color: '#1A237E' },
   changeZoneText: { fontSize: 13, fontWeight: '800', color: '#FF9800' },
