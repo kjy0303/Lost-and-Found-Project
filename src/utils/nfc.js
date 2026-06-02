@@ -1,10 +1,21 @@
-import NfcManager, { Ndef, NfcEvents } from 'react-native-nfc-manager';
+import NfcManager, { Ndef, NfcEvents, NfcTech } from 'react-native-nfc-manager';
 
 let started = false;
 const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
 const DEFAULT_NFC_TIMEOUT_MS = 20000;
 const NFC_SESSION_SETTLE_MS = 200;
 const ANDROID_READER_MODE_FLAGS = 0x1 | 0x2 | 0x4 | 0x8;
+const TECH_REQUEST_TYPES = [
+  NfcTech.Ndef,
+  NfcTech.NfcA,
+  NfcTech.NfcB,
+  NfcTech.NfcF,
+  NfcTech.NfcV,
+  NfcTech.IsoDep,
+  NfcTech.MifareUltralight,
+  NfcTech.MifareClassic,
+  NfcTech.NdefFormatable,
+];
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -131,6 +142,67 @@ export const extractNfcLocation = (rawText = '') => {
   return text;
 };
 
+const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, nextTag = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+      NfcManager.unregisterTagEvent()
+        .catch(() => {})
+        .finally(() => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(nextTag);
+        });
+    };
+    const timeoutId = setTimeout(() => {
+      finish(new Error(NFC_NOT_FOUND_MESSAGE));
+    }, timeoutMs);
+
+    NfcManager.setEventListener(NfcEvents.DiscoverTag, (discoveredTag) => {
+      finish(null, discoveredTag);
+    });
+
+    NfcManager.registerTagEvent({
+      alertMessage,
+      invalidateAfterFirstRead: true,
+      isReaderModeEnabled: true,
+      readerModeFlags: ANDROID_READER_MODE_FLAGS,
+      readerModeDelay: 250,
+    }).catch((error) => {
+      finish(error);
+    });
+  });
+};
+
+const readNfcTagByTechnology = async ({ timeoutMs, alertMessage }) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(NFC_NOT_FOUND_MESSAGE));
+    }, timeoutMs);
+  });
+
+  try {
+    await Promise.race([
+      NfcManager.requestTechnology(TECH_REQUEST_TYPES, { alertMessage }),
+      timeoutPromise,
+    ]);
+
+    return await NfcManager.getTag();
+  } finally {
+    clearTimeout(timeoutId);
+    await cancelNfcRequest();
+  }
+};
+
 export const readNfcTag = async ({
   timeoutMs = DEFAULT_NFC_TIMEOUT_MS,
   alertMessage = '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
@@ -140,43 +212,15 @@ export const readNfcTag = async ({
   await wait(NFC_SESSION_SETTLE_MS);
 
   try {
-    const tag = await new Promise((resolve, reject) => {
-      let settled = false;
-      const timeoutId = setTimeout(() => {
-        finish(new Error(NFC_NOT_FOUND_MESSAGE));
-      }, timeoutMs);
+    let tag = null;
 
-      const finish = (error, nextTag = null) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
-        NfcManager.unregisterTagEvent()
-          .catch(() => {})
-          .finally(() => {
-            if (error) {
-              reject(error);
-              return;
-            }
-
-            resolve(nextTag);
-          });
-      };
-
-      NfcManager.setEventListener(NfcEvents.DiscoverTag, (discoveredTag) => {
-        finish(null, discoveredTag);
-      });
-
-      NfcManager.registerTagEvent({
-        alertMessage,
-        invalidateAfterFirstRead: true,
-        isReaderModeEnabled: true,
-        readerModeFlags: ANDROID_READER_MODE_FLAGS,
-        readerModeDelay: 250,
-      }).catch((error) => {
-        finish(error);
-      });
-    });
+    try {
+      tag = await readNfcTagByEvent({ timeoutMs, alertMessage });
+    } catch (_eventError) {
+      await cancelNfcRequest();
+      await wait(NFC_SESSION_SETTLE_MS);
+      tag = await readNfcTagByTechnology({ timeoutMs, alertMessage });
+    }
 
     if (!tag) {
       throw new Error(NFC_NOT_FOUND_MESSAGE);
