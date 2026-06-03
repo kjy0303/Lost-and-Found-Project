@@ -1,11 +1,11 @@
 import NfcManager, { Ndef, NfcEvents, NfcTech } from 'react-native-nfc-manager';
 
 let started = false;
+let nfcReaderModeHeld = false;
 const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
 const DEFAULT_NFC_TIMEOUT_MS = 20000;
 const NFC_SESSION_SETTLE_MS = 350;
 const NFC_CANCEL_DELAY_MS_ANDROID = 350;
-const NFC_TAG_REMOVE_GRACE_MS = 1500;
 const ANDROID_READER_MODE_FLAGS = 0x1 | 0x2 | 0x4 | 0x8 | 0x100;
 const TECH_REQUEST_TYPES = [
   NfcTech.Ndef,
@@ -122,6 +122,8 @@ export const cancelNfcRequest = async () => {
     await NfcManager.unregisterTagEvent();
   } catch (_error) {
     // 등록된 태그 이벤트가 없는 경우는 무시합니다.
+  } finally {
+    nfcReaderModeHeld = false;
   }
 };
 
@@ -147,6 +149,7 @@ export const extractNfcLocation = (rawText = '') => {
 const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
   return new Promise((resolve, reject) => {
     let settled = false;
+    const shouldRegisterTagEvent = !nfcReaderModeHeld;
     const finish = (error, nextTag = null) => {
       if (settled) return;
       settled = true;
@@ -172,15 +175,21 @@ const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
       finish(null, discoveredTag);
     });
 
+    if (!shouldRegisterTagEvent) return;
+
     NfcManager.registerTagEvent({
       alertMessage,
       invalidateAfterFirstRead: true,
       isReaderModeEnabled: true,
       readerModeFlags: ANDROID_READER_MODE_FLAGS,
       readerModeDelay: 250,
-    }).catch((error) => {
-      finish(error);
-    });
+    })
+      .then(() => {
+        nfcReaderModeHeld = true;
+      })
+      .catch((error) => {
+        finish(error);
+      });
   });
 };
 
@@ -216,16 +225,20 @@ export const readNfcTag = async ({
   alertMessage = '보관구역 NFC 태그를 휴대폰에 가까이 대주세요.',
 } = {}) => {
   await ensureNfcReady();
-  await cancelNfcRequest();
-  await wait(NFC_SESSION_SETTLE_MS);
+  if (!nfcReaderModeHeld) {
+    await cancelNfcRequest();
+    await wait(NFC_SESSION_SETTLE_MS);
+  }
 
   let didReadTag = false;
+  let shouldHoldReaderModeAfterRead = false;
 
   try {
     let tag = null;
 
     try {
       tag = await readNfcTagByEvent({ timeoutMs, alertMessage });
+      shouldHoldReaderModeAfterRead = true;
     } catch (_eventError) {
       await cancelNfcRequest();
       await wait(NFC_SESSION_SETTLE_MS);
@@ -249,12 +262,11 @@ export const readNfcTag = async ({
 
     return { tag, tagId, text };
   } finally {
-    if (didReadTag) {
-      await wait(NFC_TAG_REMOVE_GRACE_MS);
+    // Android may show its own "empty tag" dialog if reader mode is released while the same tag is still nearby.
+    if (!didReadTag || !shouldHoldReaderModeAfterRead) {
+      await cancelNfcRequest();
+      await wait(NFC_SESSION_SETTLE_MS);
     }
-
-    await cancelNfcRequest();
-    await wait(NFC_SESSION_SETTLE_MS);
   }
 };
 
