@@ -117,9 +117,10 @@ export default function ZoneScreen() {
   const updateStorageZone = async (documentId, data) => {
     setLoading(true);
     try {
+      const registeredZone = zoneText;
       const itemRef = doc(db, 'lostItems', documentId);
       const updatePayload = {
-        storageZone: zoneText,
+        storageZone: registeredZone,
         storageRegisteredAt: new Date().toISOString(),
         storageZoneUpdatedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -135,7 +136,12 @@ export default function ZoneScreen() {
 
       await updateDoc(itemRef, updatePayload);
       setItemData({ ...data, ...updatePayload });
-      Alert.alert('구역 등록 완료', `보관구역이 등록되었습니다: ${zoneText}`);
+      Alert.alert(
+        '구역 등록 완료',
+        `보관구역이 등록되었습니다: ${registeredZone}`,
+        [{ text: '확인', onPress: resetAll }],
+        { cancelable: false }
+      );
     } catch (_error) {
       Alert.alert('오류', '보관구역 저장 중 문제가 발생했습니다.');
     } finally {
@@ -159,7 +165,12 @@ export default function ZoneScreen() {
     }
 
     if (currentZone === zoneText) {
-      Alert.alert('알림', `이미 ${zoneText}에 등록되어 있습니다.`);
+      Alert.alert(
+        '알림',
+        `이미 ${zoneText}에 등록되어 있습니다.`,
+        [{ text: '확인', onPress: resetAll }],
+        { cancelable: false }
+      );
       return;
     }
 

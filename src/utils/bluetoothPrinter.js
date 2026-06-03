@@ -73,22 +73,37 @@ const requestBluetoothPermissions = async () => {
   return true;
 };
 
-export const findBluetoothPrinters = async () => {
+const getReadyBluetoothClassic = async () => {
   const hasPermissions = await requestBluetoothPermissions();
-  if (!hasPermissions) return [];
+  if (!hasPermissions) return null;
 
   const BluetoothClassic = getBluetoothClassic();
   const isAvailable = await BluetoothClassic.isBluetoothAvailable();
   if (!isAvailable) {
     Alert.alert('블루투스 미지원', '이 기기에서는 블루투스를 사용할 수 없습니다.');
-    return [];
+    return null;
   }
 
   const isEnabled = await BluetoothClassic.isBluetoothEnabled();
   if (!isEnabled) {
     const enabled = await BluetoothClassic.requestBluetoothEnabled();
-    if (!enabled) return [];
+    if (!enabled) return null;
   }
+
+  return BluetoothClassic;
+};
+
+export const getBondedBluetoothPrinters = async () => {
+  const BluetoothClassic = await getReadyBluetoothClassic();
+  if (!BluetoothClassic) return [];
+
+  const bondedDevices = await BluetoothClassic.getBondedDevices();
+  return mergeBluetoothDevices(bondedDevices);
+};
+
+export const findBluetoothPrinters = async () => {
+  const BluetoothClassic = await getReadyBluetoothClassic();
+  if (!BluetoothClassic) return [];
 
   const bondedDevices = await BluetoothClassic.getBondedDevices();
   let discoveredDevices = [];

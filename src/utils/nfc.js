@@ -3,7 +3,8 @@ import NfcManager, { Ndef, NfcEvents, NfcTech } from 'react-native-nfc-manager';
 let started = false;
 const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
 const DEFAULT_NFC_TIMEOUT_MS = 20000;
-const NFC_SESSION_SETTLE_MS = 200;
+const NFC_SESSION_SETTLE_MS = 350;
+const NFC_CANCEL_DELAY_MS_ANDROID = 350;
 const ANDROID_READER_MODE_FLAGS = 0x1 | 0x2 | 0x4 | 0x8;
 const TECH_REQUEST_TYPES = [
   NfcTech.Ndef,
@@ -111,7 +112,7 @@ export const cancelNfcRequest = async () => {
   }
 
   try {
-    await NfcManager.cancelTechnologyRequest({ delayMsAndroid: 0 });
+    await NfcManager.cancelTechnologyRequest({ delayMsAndroid: NFC_CANCEL_DELAY_MS_ANDROID });
   } catch (_error) {
     // 이미 취소되었거나 요청이 없는 경우는 다음 스캔을 막지 않도록 무시합니다.
   }
@@ -149,8 +150,7 @@ const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
-      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
-      NfcManager.unregisterTagEvent()
+      cancelNfcRequest()
         .catch(() => {})
         .finally(() => {
           if (error) {

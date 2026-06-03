@@ -21,6 +21,7 @@ import {
   connectBluetoothPrinter,
   disconnectBluetoothPrinter,
   findBluetoothPrinters,
+  getBondedBluetoothPrinters,
   getConnectedPrinter,
   getDeviceAddress,
   getDeviceName,
@@ -33,6 +34,7 @@ const { width } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
 const REGISTER_ICON = require('../assets/lost-and-found-icon.png');
 const ZONE_OPTIONS = ['A구역', 'B구역', 'C구역', '이관대기'];
+const NFC_ZONE_INITIAL_STATUS = 'NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.';
 
 export default function MainScreen() {
   const router = useRouter();
@@ -48,7 +50,7 @@ export default function MainScreen() {
   const [isReadingNfcZone, setIsReadingNfcZone] = useState(false);
   const [isSavingNfcZone, setIsSavingNfcZone] = useState(false);
   const [nfcZoneTagId, setNfcZoneTagId] = useState('');
-  const [nfcZoneStatus, setNfcZoneStatus] = useState('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
+  const [nfcZoneStatus, setNfcZoneStatus] = useState(NFC_ZONE_INITIAL_STATUS);
   const [connectedPrinter, setConnectedPrinter] = useState(getConnectedPrinter());
   const [printerStatus, setPrinterStatus] = useState('프린터 미연결');
 
@@ -112,18 +114,46 @@ export default function MainScreen() {
     );
   };
 
+  const handleLoadBondedPrinters = async () => {
+    if (isScanningPrinters) return;
+
+    setIsScanningPrinters(true);
+    setPrinterStatus('페어링된 프린터 확인 중...');
+
+    try {
+      const bondedDevices = await getBondedBluetoothPrinters();
+      setPrinterDevices(bondedDevices);
+      setPrinterStatus(
+        bondedDevices.length > 0
+          ? `페어링된 기기: ${bondedDevices.length}개`
+          : '페어링된 기기가 없습니다. 주변 검색을 눌러주세요.'
+      );
+    } catch (error) {
+      console.error('페어링된 블루투스 조회 오류:', error);
+      setPrinterStatus('페어링된 프린터 조회 실패');
+      Alert.alert('조회 실패', '페어링된 블루투스 기기를 불러오는 중 문제가 발생했습니다.');
+    } finally {
+      setIsScanningPrinters(false);
+    }
+  };
+
+  const openPrinterModal = () => {
+    setIsPrinterModalVisible(true);
+    handleLoadBondedPrinters();
+  };
+
   const handleFindPrinters = async () => {
     if (isScanningPrinters) return;
 
     setIsScanningPrinters(true);
-    setPrinterStatus('프린터 검색 중...');
+    setPrinterStatus('주변 프린터 검색 중...');
 
     try {
       const mergedDevices = await findBluetoothPrinters();
       setPrinterDevices(mergedDevices);
       setPrinterStatus(
         mergedDevices.length > 0
-          ? `검색 완료: ${mergedDevices.length}개 기기`
+          ? `주변 검색 완료: ${mergedDevices.length}개 기기`
           : '검색된 기기가 없습니다'
       );
     } catch (error) {
@@ -186,7 +216,7 @@ export default function MainScreen() {
 
   const openNfcZoneModal = () => {
     setNfcZoneTagId('');
-    setNfcZoneStatus('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
+    setNfcZoneStatus(NFC_ZONE_INITIAL_STATUS);
     setIsNfcZoneModalVisible(true);
   };
 
@@ -195,7 +225,12 @@ export default function MainScreen() {
 
     setIsNfcZoneModalVisible(false);
     setNfcZoneTagId('');
-    setNfcZoneStatus('NFC 태그 읽기를 눌러 등록할 태그를 확인하세요.');
+    setNfcZoneStatus(NFC_ZONE_INITIAL_STATUS);
+  };
+
+  const resetNfcZoneRegistration = () => {
+    setNfcZoneTagId('');
+    setNfcZoneStatus(NFC_ZONE_INITIAL_STATUS);
   };
 
   const handleReadNfcZoneTag = async () => {
@@ -251,7 +286,7 @@ export default function MainScreen() {
       }
 
       await setDoc(zoneRef, payload, { merge: true });
-      setNfcZoneStatus(`${zoneName} 태그로 등록되었습니다.`);
+      resetNfcZoneRegistration();
       Alert.alert('등록 완료', `${zoneName} 태그로 저장되었습니다.`);
     } catch (error) {
       console.error('NFC 구역 태그 저장 오류:', error);
@@ -366,7 +401,7 @@ export default function MainScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.settingsActionButton} onPress={() => setIsPrinterModalVisible(true)}>
+              <TouchableOpacity style={styles.settingsActionButton} onPress={openPrinterModal}>
                 <Ionicons name="bluetooth" size={22} color="#1A237E" />
                 <Text style={styles.settingsActionText}>블루투스 연결</Text>
                 <Ionicons name="chevron-forward" size={20} color="#1A237E" />
@@ -438,7 +473,7 @@ export default function MainScreen() {
                 <Ionicons name="search" size={20} color="#1A237E" />
               )}
               <Text style={styles.bluetoothButtonText}>
-                {isScanningPrinters ? '프린터 찾는 중...' : '프린터 찾기'}
+                {isScanningPrinters ? '프린터 확인 중...' : '주변 프린터 검색'}
               </Text>
             </TouchableOpacity>
 
@@ -446,7 +481,7 @@ export default function MainScreen() {
 
             <ScrollView style={styles.printerModalList} showsVerticalScrollIndicator={false}>
               {printerDevices.length === 0 ? (
-                <Text style={styles.emptyPrinterText}>프린터 찾기를 눌러 등록된 기기와 주변 기기를 불러오세요.</Text>
+                <Text style={styles.emptyPrinterText}>페어링된 프린터가 없으면 주변 프린터 검색을 눌러 새 기기를 찾아주세요.</Text>
               ) : (
                 printerDevices.map((device) => {
                   const address = getDeviceAddress(device);
