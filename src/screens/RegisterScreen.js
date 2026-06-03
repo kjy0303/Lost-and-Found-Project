@@ -101,6 +101,7 @@ const formatWithGemini = async (visionRawData, base64Image) => {
 
   [🚨 1단계: 시각적 팩트 체크]
   1. WEB_DETECTION 맹신 금지. 카메라 렌즈 개수, 전면 구멍, 이어팁 유무 등 시각적 증거 우선. 텍스트(TEXT_DETECTION) 증거 최우선.
+  1-1. 중심물건 집중 분석: 사진에서 분실물로 보이는 중심물건 하나에만 집중해. 주변 환경, 배경, 중심물건이 아닌 다른 물건은 대분류/소분류/브랜드/색상/특징/상세묘사/키워드 판단에서 배제해.
 
   [🚨 2단계: 시리즈명 추측 금지]
   2. '아이폰', '갤럭시', '에어팟' 등 기본 라인업까지만 허용. 텍스트로 입증 안 되면 '15', 'Pro', '4세대' 등 구체적 시리즈 절대 기재 금지.
@@ -314,6 +315,7 @@ export default function RegisterScreen() {
       const updatePrompt = `
       관리자가 AI의 초기 분석 결과를 직접 수정했어.
       수정된 데이터에 완벽하게 맞춰서 'description'(상세 묘사)과 'keywords'(검색 키워드 배열)만 다시 작성해.
+      description과 keywords도 수정된 중심물건만 다루고, 주변 환경이나 중심물건이 아닌 다른 물건은 추가하지 마.
 
       [관리자 수정 데이터]
       - 대분류: ${editableData.main_category}

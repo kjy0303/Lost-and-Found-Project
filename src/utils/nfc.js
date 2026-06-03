@@ -5,7 +5,8 @@ const NFC_NOT_FOUND_MESSAGE = 'NFC 태그를 찾지 못했습니다.';
 const DEFAULT_NFC_TIMEOUT_MS = 20000;
 const NFC_SESSION_SETTLE_MS = 350;
 const NFC_CANCEL_DELAY_MS_ANDROID = 350;
-const ANDROID_READER_MODE_FLAGS = 0x1 | 0x2 | 0x4 | 0x8;
+const NFC_TAG_REMOVE_GRACE_MS = 1500;
+const ANDROID_READER_MODE_FLAGS = 0x1 | 0x2 | 0x4 | 0x8 | 0x100;
 const TECH_REQUEST_TYPES = [
   NfcTech.Ndef,
   NfcTech.NfcA,
@@ -150,16 +151,18 @@ const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
-      cancelNfcRequest()
-        .catch(() => {})
-        .finally(() => {
-          if (error) {
-            reject(error);
-            return;
-          }
+      try {
+        NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+      } catch (_error) {
+        // 이벤트 리스너가 없는 경우는 무시합니다.
+      }
 
-          resolve(nextTag);
-        });
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(nextTag);
     };
     const timeoutId = setTimeout(() => {
       finish(new Error(NFC_NOT_FOUND_MESSAGE));
@@ -183,6 +186,7 @@ const readNfcTagByEvent = async ({ timeoutMs, alertMessage }) => {
 
 const readNfcTagByTechnology = async ({ timeoutMs, alertMessage }) => {
   let timeoutId;
+  let didGetTag = false;
 
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
@@ -196,10 +200,14 @@ const readNfcTagByTechnology = async ({ timeoutMs, alertMessage }) => {
       timeoutPromise,
     ]);
 
-    return await NfcManager.getTag();
+    const tag = await NfcManager.getTag();
+    didGetTag = Boolean(tag);
+    return tag;
   } finally {
     clearTimeout(timeoutId);
-    await cancelNfcRequest();
+    if (!didGetTag) {
+      await cancelNfcRequest();
+    }
   }
 };
 
@@ -210,6 +218,8 @@ export const readNfcTag = async ({
   await ensureNfcReady();
   await cancelNfcRequest();
   await wait(NFC_SESSION_SETTLE_MS);
+
+  let didReadTag = false;
 
   try {
     let tag = null;
@@ -226,6 +236,8 @@ export const readNfcTag = async ({
       throw new Error(NFC_NOT_FOUND_MESSAGE);
     }
 
+    didReadTag = true;
+
     const tagId = extractNfcTagId(tag);
     if (!tagId) {
       throw new Error('NFC 태그 ID를 읽지 못했습니다.');
@@ -237,6 +249,10 @@ export const readNfcTag = async ({
 
     return { tag, tagId, text };
   } finally {
+    if (didReadTag) {
+      await wait(NFC_TAG_REMOVE_GRACE_MS);
+    }
+
     await cancelNfcRequest();
     await wait(NFC_SESSION_SETTLE_MS);
   }
