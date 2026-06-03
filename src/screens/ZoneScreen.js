@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,7 +18,7 @@ import {
   View
 } from 'react-native';
 import { db } from '../../firebaseConfig';
-import { extractNfcLocation, readNfcTag } from '../utils/nfc';
+import { cancelNfcRequest, extractNfcLocation, readNfcTag } from '../utils/nfc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NFC_ZONE_ICON = require('../assets/nfc-zone-icon.png');
@@ -37,6 +38,20 @@ export default function ZoneScreen() {
   const [selectedTagId, setSelectedTagId] = useState('');
   const [itemData, setItemData] = useState(null);
   const [itemDocId, setItemDocId] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        cancelNfcRequest().catch(() => {});
+      };
+    }, [])
+  );
+
+  const goHome = () => {
+    cancelNfcRequest().finally(() => {
+      router.push('/');
+    });
+  };
 
   const selectZone = (zone, rawText = '', tagId = '') => {
     setNfcRawText(rawText);
@@ -69,7 +84,7 @@ export default function ZoneScreen() {
           '구역 확인 완료',
           `${savedZoneName} 태그가 확인되었습니다.\n물품 연결을 진행하시겠습니까?`,
           [
-            { text: '취소', style: 'cancel' },
+            { text: '취소', style: 'cancel', onPress: () => cancelNfcRequest().catch(() => {}) },
             { text: '물품 연결', onPress: () => selectZone(savedZoneName, text || '', tagId) },
           ]
         );
@@ -103,6 +118,7 @@ export default function ZoneScreen() {
   };
 
   const resetAll = () => {
+    cancelNfcRequest().catch(() => {});
     setStep('nfc');
     setScanMode('scan');
     setScanned(false);
@@ -273,7 +289,7 @@ export default function ZoneScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/')} style={styles.homeButton}>
+        <TouchableOpacity onPress={goHome} style={styles.homeButton}>
           <Ionicons name="home-outline" size={28} color="#1A237E" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>구역 등록</Text>
