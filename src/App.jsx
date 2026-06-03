@@ -229,7 +229,15 @@ function App() {
         }
 
         setStatItems(statsData);
-        setClaims([]);
+
+        try {
+          const claimQ = query(collection(db, "lostItemClaims"), orderBy("registeredAt", "desc"));
+          const claimSnap = await getDocs(claimQ);
+          setClaims(claimSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+        } catch (claimError) {
+          console.error(claimError);
+          setClaims([]);
+        }
 
       } catch (e) { 
         console.error(e);
@@ -322,22 +330,27 @@ function App() {
     }
   };
 
-  const handleClaimSubmit = () => {
+  const handleClaimSubmit = async () => {
     if (!newClaimName.trim() || !newClaimInfo.trim()) return alert("물품명과 상세 정보를 모두 입력해주세요.");
     
     const newClaim = {
-      id: `c_${Date.now()}`,
-      itemName: newClaimName,
-      itemInfo: newClaimInfo,
+      itemName: newClaimName.trim(),
+      itemInfo: newClaimInfo.trim(),
       status: '접수됨',
       registeredAt: new Date().toISOString()
     };
     
-    setClaims([newClaim, ...claims]);
-    setNewClaimName('');
-    setNewClaimInfo('');
-    setClaimPage(1);
-    alert("정상적으로 접수되었습니다.");
+    try {
+      const claimRef = await addDoc(collection(db, "lostItemClaims"), newClaim);
+      setClaims((prevClaims) => [{ id: claimRef.id, ...newClaim }, ...prevClaims]);
+      setNewClaimName('');
+      setNewClaimInfo('');
+      setClaimPage(1);
+      alert("정상적으로 접수되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("접수 저장 중 오류가 발생했습니다.");
+    }
   };
 
   const handleDailyClaimMatch = async () => {
@@ -380,11 +393,12 @@ function App() {
       if (matchResults.length === 0) {
         alert("보관 중인 물품 중 의심되는 매칭 결과가 없습니다.");
       } else {
+        const claimUpdates = [];
         const updatedClaims = claims.map(claim => {
           const matchInfo = matchResults.find(m => m.claimId === claim.id);
           if (matchInfo) {
             const storedItem = items.find(i => i.id === matchInfo.matchedItemId);
-            return {
+            const updatedClaim = {
               ...claim,
               status: '의심물품 발견',
               matchedFeature: storedItem ? cleanFeatureText(storedItem) : '알 수 없음',
@@ -392,9 +406,23 @@ function App() {
               aiReason: matchInfo.reason,
               aiConfidence: matchInfo.confidence
             };
+
+            claimUpdates.push(updateDoc(doc(db, "lostItemClaims", claim.id), {
+              status: updatedClaim.status,
+              matchedFeature: updatedClaim.matchedFeature,
+              matchedSerial: updatedClaim.matchedSerial,
+              aiReason: updatedClaim.aiReason,
+              aiConfidence: updatedClaim.aiConfidence,
+              matchedItemId: matchInfo.matchedItemId,
+              matchedAt: new Date().toISOString()
+            }));
+
+            return updatedClaim;
           }
           return claim;
         });
+
+        await Promise.all(claimUpdates);
         setClaims(updatedClaims);
         alert(`${matchResults.length}건의 의심 물품을 발견했습니다! 목록의 경고 표시를 확인하세요.`);
       }
@@ -544,7 +572,7 @@ function App() {
     }
   });
   
-  const pieChartDataRaw = Object.entries(catDetailedStats).filter(([_, data]) => data.total > 0).map(([name, data]) => ({ name, value: data.total })).sort((a, b) => b.value - a.value);
+  const pieChartDataRaw = Object.entries(catDetailedStats).filter((entry) => entry[1].total > 0).map(([name, data]) => ({ name, value: data.total })).sort((a, b) => b.value - a.value);
   const top5PieData = pieChartDataRaw.slice(0, 5);
   const othersValue = pieChartDataRaw.slice(5).reduce((sum, item) => sum + item.value, 0);
   const finalPieData = othersValue > 0 ? [...top5PieData, { name: '기타', value: othersValue }] : top5PieData;
